@@ -1,6 +1,6 @@
 # AdaBoost.sampled
 
 # Data sets
-https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary.html#breast-cancer
-https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary.html#mushrooms
-https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary.html#diabetes
+1. https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary.html#breast-cancer
+2. https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary.html#mushrooms
+3. https://www.csie.ntu.edu.tw/~cjlin/libsvmtools/datasets/binary.html#diabetes
