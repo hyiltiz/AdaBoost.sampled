@@ -3,7 +3,12 @@ import sys
 
 def read(file):
 	"""
-	Takes a file with data in the 'libsvm' format and returns the data in a 2 dimensional ndarray
+	Takes a file with data in the 'libsvm' format and returns the data in a 2 dimensional ndarray.
+	The first element each line is the class of data point.
+
+	TODO: breast-cancer classifies using [2,4] instead of [-1,1] for some reason. This needs to be
+	changed eventually
+
 	@ Params: file
 	@ Return: datarray
 	"""
@@ -22,7 +27,9 @@ def read(file):
 def __checkdata(file):
 	"""
 	Takes a file with data in the 'libsvm' format and returns a list where each element is a line of the data
-	This function removes all lines in the data where data for any features is missing
+	This function removes all lines in the data where data for any features is missing. This function relies on the
+	first line in the data having the full number of features so that needs to be checked manually beforehand.
+	
 	@ Params: file
 	@ Return: datalines (missing data is removed)
 	"""
