@@ -1,5 +1,9 @@
-import numpy as np  
+#!/usr/bin/env python2
+import numpy as np
 import sys
+
+# use this to debug
+# import pdb; pdb.set_trace()
 
 def read(file):
 	"""
@@ -25,13 +29,15 @@ def read(file):
 			else:
 				dataline_list[j+1] = dataline_list[j+1][2:]
 		datarray[i,:] = dataline_list
-	return datarray
+	# normalize the data into [-1,1]
+	scale = lambda x: (x-np.min(x))/(np.max(x)-np.min(x))*2-1
+	return scale(datarray)
 
-def split(file, seed = 0, p_train = 0.8):
+def split(file, seed=0, p_train=0.8):
 	"""
 	Splits a given data file into a training set and a testing set. Using 80% of the data as the training set
 	and 20% of the data as the testing set. A seed can be passed as a parameter to change how the function
-	random splits the data. p_train is the percentage of data points that will be training data. 
+	random splits the data. p_train is the percentage of data points that will be training data.
 
 	Writes the training and testing data to new files called 'file'+ '_test' + str(seed) and 'file' + '_train' + str(seed).
 
@@ -47,7 +53,7 @@ def split(file, seed = 0, p_train = 0.8):
 		else:
 			data_train.append(datarray[i])
 	np.save((file[:-4]+ "_train" + str(seed)+".npy"), data_train)
-	np.save((file[:-4]+ "_test" + str(seed) + ".npy"), data_test)	
+	np.save((file[:-4]+ "_test" + str(seed) + ".npy"), data_test)
 	return data_train, data_test
 
 def __checkdata(file):
@@ -77,8 +83,8 @@ if __name__ == '__main__':
 	elif sys.arvg[2] == 'w':
 		# Probably don't need to do this
 		write(sys.argv[1])
-	else: 
+	else:
 		print "Use command 'python <file-name> <r,split,w>'" + \
 			  "\n" + "'r'to read the data from the file and return an array" +\
 			  "\n" + "'split' to split the data into a training and test data" +\
-			  "\n" + "'w' to write to a data file"	
+			  "\n" + "'w' to write to a data file"
