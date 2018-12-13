@@ -4,8 +4,8 @@ import sys
 def generate_baseclassifiers(file, n):
 	"""
 	Given a '.npy' file with data stored in a 2D array where each sample is a row in the data,
-	this function generates a set of base classifiers of threshold functions that separate 
-	the range over which each features spans into 'n' possible thresholds.
+    this function generates a set of base classifiers of threshold functions that separate 
+    the range over which each features spans into 'n' possible thresholds.
 
 	@ Param: file, n
 	@ Return: 2D array of feature x threshold
@@ -18,13 +18,13 @@ def generate_baseclassifiers(file, n):
 				feature_ranges[0,j] = data[i,j+1]
 			elif data[i,j+1] > feature_ranges[1,j]:	
 				feature_ranges[1,j] = data[i,j+1]
-	
-	classifiers = np.zeros((n,N_feats))			
+
+	classifiers = np.zeros((n,N_feats))
 
 	for k in range(N_feats):
 		classifiers[:,k] = np.transpose(np.linspace(feature_ranges[0,k], feature_ranges[1,k], n))
 
 	return classifiers
-	
+
 if __name__ == '__main__':
 	generate_baseclassifiers(sys.argv[1],sys.argv[2])

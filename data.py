@@ -10,9 +10,6 @@ def read(file):
 	Takes a file with data in the 'libsvm' format and returns the data in a 2 dimensional ndarray.
 	The first element each line is the class of data point.
 
-	TODO: breast-cancer classifies using [2,4] instead of [-1,1] for some reason. This needs to be
-	changed eventually
-
 	@ Params: file
 	@ Return: datarray
 	"""
