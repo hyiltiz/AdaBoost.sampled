@@ -20,6 +20,7 @@ def adaBoost(data_npy='breast-cancer_train0.npy', sampleRatio=(0,0), T=int(1e2),
     m_samples = data.shape[0]
 
     stumps = createBoostingStumps(data)
+    writeStumps2CSV(stumps, data_npy)
 
     # AdaBoost algorithm
     D_t = np.zeros(m_samples)+1.0/m_samples
@@ -59,10 +60,27 @@ def createBoostingStumps(data):
             if weighted_error > 0.5:
                 iDirection = -iDirection # invert the classifier
                 errors = 1-errors
-            weight = 1.0
+            weight = 1.0 # stores alpha, not used until predict() i.e. until adaBoost() finishes training
+            # weighted_error weights classification errors by D_t
+            # Here D_t is uniform to create the stumps
             baseClassifiers.append((weighted_error, (iThreshold, iDirection*iFeature,weight), errors))
 
     return baseClassifiers
+
+def writeStumps2CSV(stumps, data_npy):
+    stumpsTable = np.zeros((len(stumps), 5))
+    for iStump in range(len(stumps)):
+            stumpsTable[iStump,:] = np.hstack((
+                    np.array(stumps[iStump][0]), # weighted_error
+                    np.array(stumps[iStump][1]), # stumps (threshold, feature*direction, alpha)
+                    np.sum(stumps[iStump][2])/stumps[iStump][2].shape[0] # error
+            ))
+
+    # 0.5-weighted_error=gamma when D_t is uniform, i.e. for base classifiers
+    # this does not hold for g, i.e. post training classifiers
+    np.savetxt(data_npy + '_stumps.log.csv', stumpsTable, delimiter=',', newline='\n', comments='',
+                  header='weighted_error, threshold, feature, weight_alpha, error')
+
 
 def evalToPickClassifier(stumps, D_t, data, sampleRatio, seed):
     """
@@ -139,7 +157,7 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
 
 
 if __name__ == '__main__':
-    import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
     if len(sys.argv) == 1:
         print "Use command 'python2 adaboost.py <data> 0.3 1e4 0'" + \
             "\n" + "to run adaBoost with threshold functions as base classifiers on" + \
