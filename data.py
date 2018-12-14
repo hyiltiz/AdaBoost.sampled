@@ -85,7 +85,7 @@ if __name__ == '__main__':
     elif sys.argv[2] == 'split':
         # TODO: implement split
         split(sys.argv[1])
-    elif sys.arvg[2] == 'w':
+    elif sys.argv[2] == 'w':
         # Probably don't need to do this
         write(sys.argv[1])
     else:
