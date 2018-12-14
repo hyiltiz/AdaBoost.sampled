@@ -118,7 +118,7 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
     Use the learned stumps (thresholds for features and their directions) to
     predict labels for new data.
     """
-    import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
     data = np.load(test_data_npy)
     y = data[:,0]
     h_x = np.zeros((data.shape[0], len(learnedClassifiers)))
@@ -133,17 +133,39 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
             errors = 1 - errors
         h_x[:,iStump] = weight*((errors+0)*2-1)
 
-    return np.sign(np.sum(h_x, 1))
+    y_predict = np.sign(np.sum(h_x, 1))
+    error = np.sum(y != y_predict)/y.shape[0]
+    return error, y_predict,y
 
 
 if __name__ == '__main__':
-    if len(sys.argv) >= 0:
-        print('Learning...')
+    import pdb; pdb.set_trace()
+    if len(sys.argv) == 1:
+        print "Use command 'python2 adaboost.py <data> 0.3 1e4 0'" + \
+            "\n" + "to run adaBoost with threshold functions as base classifiers on" + \
+            "\n" + "the dataset in <data>_train0.npy then test <data>_test0.npy." + \
+            "\n" + "At each iteration of the 1e4 total iterations," +\
+            "\n" + "only 30% of the classifiers are evaluated randomly selected with seed 0." + \
+            "\n" + "You can also only provide the <data> to keep the rest as default, or everything except the seed."
+        print('-----------------------------------')
+        print('Learning with default parameters...')
         g = adaBoost()
         print('Predicting...')
-        predict(g, test_data_npy='breast-cancer_test0.npy', )
+        error = predict(g, test_data_npy='breast-cancer_test0.npy', )
+    elif  len(sys.argv) == 3:
+            seed = 0
+            g = adaBoost(sys.argv[1] + '_train0.npy', (0, float(sys.argv[2])), int(1e4), seed)
+            error = predict(g, sys.argv[1] + '_test0.npy')
+            print('The error for {} was: {}'.format(sys.argv[1]+'_test0.npy', error))
+    elif len(sys.argv) == 5:
+            seed = 0
+            g = adaBoost(sys.argv[1] + '_train0.npy', (0, float(sys.argv[2])), int(sys.argv[3]), float(sys.argv[4]))
+            error = predict(g, sys.argv[1] + '_test0.npy')
+            print('The error for {} was: {}'.format(sys.argv[1]+'_test0.npy', error))
     else:
-        print "Use command 'python <file-name> train.npy (0.1,0.3) 0'" + \
-            "\n" + "to run adaBoost with threshold functions as base classifiers on" +\
-            "\n" + "the dataset in train.npy. At each epoch, 10% of the data are used." +\
-            "\n" + "and 30% of the classifiers are being evaluated."
+        print "Use command 'python2 adaboost.py <data> 0.3 1e4 0'" + \
+            "\n" + "to run adaBoost with threshold functions as base classifiers on" + \
+            "\n" + "the dataset in <data>_train0.npy then test <data>_test0.npy." + \
+            "\n" + "At each iteration of the 1e4 total iterations," +\
+            "\n" + "only 30% of the classifiers are evaluated randomly selected with seed 0." + \
+            "\n" + "You can also only provide the <data> to keep the rest as default, or everything except the seed."
