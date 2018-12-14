@@ -54,47 +54,65 @@ def createBoostingStumps(data):
 		for iThreshold in thresholds:
 			iDirection = +1
 			h_i_x = ((thresholds >= iThreshold)+0)*2-1
-			error = sum(D_t * (-y * h_i_x+1)/2)
+			errors = (-y * h_i_x+1)/2
+			weighted_error = sum(D_t * (-y * h_i_x+1)/2)
 			if error > 0.5:
 				iDirection = -1 # invert the classifier
 			weight = 1.0
-			baseClassifiers.append((error, (iThreshold, iDirection*iFeature,weight)))
+			baseClassifiers.append((weighted_error, (iThreshold, iDirection*iFeature,weight), errors))
 
 	return baseClassifiers
 
-def evalToPickClassifier(classifiers, D_t, data, sampleRatio, seed):
+def evalToPickClassifier(stumps, D_t, data, sampleRatio, seed):
 	"""
 	This function currently samples the data. Could also sample the classifiers.
 	"""
-#	import pdb; pdb.set_trace()
-#	np.random.seed(seed)
-#	sampleDataRatio, sampleClassifierRatio = sampleRatio
-#	if sampleDataRatio == 0:
-#		# treat these the same: no sampling or sample everything
-#		sampleDataRatio == 1
-#	index_data = np.random.rand(1, data.shape[1]-1) < sampleDataRatio
-#
-#	if sampleClassifierRatio == 0:
-#	# treat these the same: no sampling or sample everything
-#		sampleClassifierRatio == 1
-#	index_classifiers = np.random.rand(1, classifiers.shape[1]-1) < sampleClassifierRatio # NOTE: shape is wrong
-#
-#	N_feats = data.shape[1]-1 - 1 # 1st column is labels
-#	# only use the subsets
-#	isCorrect = compare(data[index_data], classifiers[index_classifiers]) # NOTE: to be implemented
-#	error = np.sum(not isCorrect)
-#	h_t = np.argmin(error)
-#	e_t = np.min(error)
-#
-#	return e_t, h_t
-	h_t_x = np.random.binomial(1,0.6,data.shape[0])*2-1
-	return (0.4, (0.1,+1, 1),h_t_x) # returns (error, (threshold,direction*feature, weight),[h(x_i)])
+	import pdb; pdb.set_trace()
+	np.random.seed(seed)
+	sampleDataRatio, sampleClassifierRatio = sampleRatio
+	if sampleDataRatio == 0:
+		# treat these the same: no sampling or sample everything
+		sampleDataRatio == 1
+	index_data = np.random.rand(1, data.shape[1]-1) < sampleDataRatio
+
+	if sampleClassifierRatio == 0:
+	# treat these the same: no sampling or sample everything
+		sampleClassifie
+	index_classifiers = np.random.rand(1, len(classifiers)) < sampleClassifierRatio
+	index_classifiers_list = np.ndarray.tolist(np.where(index_classifiers)[0])
+
+	y = data[:,0]
+	# D_t = 1.0/data.shape[0]
+
+	# evaluate a subset of classifiers
+	# keeping track of the smallest error
+	bestInSample = (nan,1)
+	for iStump in index_classifiers_list: # 0th column is the label
+		# load a classifier
+		iThreshold,temp,weight = stumps[iStump][1]
+		iFeature = np.abs(temp)
+		iDirection = temp > 0
+		errors = stumps[iStump][2]
+
+		weighted_error = sum(D_t * errors)
+		if weighted_error > 0.5:
+			iDirection = -iDirection # invert the classifier
+			weighted_error = 1 - weighted_error
+
+		if weighted_error < bestInSample[1]:
+			bestInSample = (iStump, weighted_error)
+
+		# update this classifier
+		weight = 1.0
+		stumps[iStump] = (weighted_error, (iThreshold, iDirection*iFeature,weight), errors)
+
+	return bestInSample[1], stumps[bestInSample[0]], errors
 
 if __name__ == '__main__':
-	#if isinstance(sys.argv[1], basestring):
+	if len(sys.argv) >= 0:
 	adaBoost()
-	#else:
-	#	print "Use command 'python <file-name> train.npy (0.1,0.3) 0'" + \
-	#		  "\n" + "to run adaBoost with threshold functions as base classifiers on" +\
-	#		  "\n" + "the dataset in train.npy. At each epoch, 10% of the data are used." +\
-	#		  "\n" + "and 30% of the classifiers are being evaluated."
+	else:
+		print "Use command 'python <file-name> train.npy (0.1,0.3) 0'" + \
+			  "\n" + "to run adaBoost with threshold functions as base classifiers on" +\
+			  "\n" + "the dataset in train.npy. At each epoch, 10% of the data are used." +\
+			  "\n" + "and 30% of the classifiers are being evaluated."
