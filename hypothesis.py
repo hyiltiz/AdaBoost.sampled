@@ -10,7 +10,6 @@ def generate_baseclassifiers(file, n):
 	@ Param: file, n
 	@ Return: 2D array of feature x threshold
 	"""
-	import pdb; pdb.set_trace()
 	data, n = np.load(file), int(n)
 	feature_ranges,	N_feats = np.zeros((2,data.shape[1])),data.shape[1]-1
 	for j in range(N_feats):
@@ -19,12 +18,12 @@ def generate_baseclassifiers(file, n):
 				feature_ranges[0,j] = data[i,j+1]
 			elif data[i,j+1] > feature_ranges[1,j]:
 				feature_ranges[1,j] = data[i,j+1]
-	import pdb; pdb.set_trace()
+
 	classifiers = np.zeros((n,N_feats+1))
 
 	for k in range(N_feats):
 		classifiers[:,k] = np.transpose(np.linspace(feature_ranges[0,k], feature_ranges[1,k], n))
-	import pdb; pdb.set_trace()
+
 	return classifiers
 
 if __name__ == '__main__':
