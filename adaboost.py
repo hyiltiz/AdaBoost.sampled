@@ -171,36 +171,46 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
 
 if __name__ == '__main__':
     # import pdb; pdb.set_trace()
-    if len(sys.argv) == 1:
-        print "Use command 'python2 adaboost.py <data> 0.3 1e4 0 [--log=INFO]'" + \
-            "\n" + "to run adaBoost with threshold functions as base classifiers on" + \
-            "\n" + "the dataset in <data>_train0.npy then test <data>_test0.npy." + \
-            "\n" + "At each iteration of the 1e4 total iterations," + \
-            "\n" + "only 30% of the classifiers are evaluated randomly selected with seed 0." + \
-            "\n" + "You can also only provide the <data> to keep the rest as default, or everything except the seed." + \
-            "\n" + "Use --log=INFO to enable logging classifiers at each iteration to inspect gamma."
-        print('-----------------------------------')
-        print('Learning with default parameters...')
-        g = adaBoost()
-        print('Predicting...')
-        error = predict(g, test_data_npy='breast-cancer_test0.npy', )
-    elif  len(sys.argv) == 3:
-            seed = 0
-            g = adaBoost(sys.argv[1] + '_train0.npy', (0, float(sys.argv[2])), int(1e4), seed)
-            error, y_predict, y, errors= predict(g, sys.argv[1] + '_test0.npy')
-            print('The error for {} was: {}'.format(sys.argv[1]+'_test0.npy', error))
-    elif len(sys.argv) >= 5:
-            loglevel = getattr(logging, sys.argv[5][6:].upper())
-            seed = 0
-            g = adaBoost(sys.argv[1] + '_train0.npy', (0, float(sys.argv[2])), int(float(sys.argv[3])), int(sys.argv[4]), loglevel)
-            error, y_predict, y, errors= predict(g, sys.argv[1] + '_test0.npy')
-            print('The error for {} was: {}'.format(sys.argv[1]+'_test0.npy', error))
+    print "Use command 'python2 adaboost.py <data> 0.3 1e4 0 [--log=INFO]'" + \
+        "\n" + "to run adaBoost with threshold functions as base classifiers on" + \
+        "\n" + "the dataset in <data>_train0.npy then test <data>_test0.npy." + \
+        "\n" + "At each iteration of the 1e4 total iterations," + \
+        "\n" + "only 30% of the classifiers are evaluated randomly selected with seed 0." + \
+        "\n" + "You can also only provide the <data> to keep the rest as default, or everything except the seed." + \
+        "\n" + "Use --log=INFO to enable logging classifiers at each iteration to inspect gamma." + \
+        "\n" + "Examples:" + \
+        "\n" + "python2 adaboost.py" + \
+        "\n" + "python2 adaboost.py breast-cancer 0.25" + \
+        "\n" + "python2 adaboost.py breast-cancer 0.25 1e4" + \
+        "\n" + "python2 adaboost.py cod-rna 0.3 1e4 1234" + \
+        "\n" + "python2 adaboost.py cod-rna 0.3 1e4 1234 --log=INFO" + \
+    print('-----------------------------------\n')
+    if len(sys.argv) < 6:
+            loglevel = 0
     else:
-        print "Use command 'python2 adaboost.py <data> 0.3 1e4 0 [--log=INFO]'" + \
-            "\n" + "to run adaBoost with threshold functions as base classifiers on" + \
-            "\n" + "the dataset in <data>_train0.npy then test <data>_test0.npy." + \
-            "\n" + "At each iteration of the 1e4 total iterations," + \
-            "\n" + "only 30% of the classifiers are evaluated randomly selected with seed 0." + \
-            "\n" + "You can also only provide the <data> to keep the rest as default, or everything except the seed." + \
-            "\n" + "Use --log=INFO to enable logging classifiers at each iteration to inspect gamma."
+            loglevel = getattr(logging, sys.argv[5][6:].upper())
+            print('Logs enabled.')
+
+    if len(sys.argv) < 5:
+            seed = 0
+    else:
+            seed = int(sys.argv[4])
+    if len(sys.argv) < 4:
+            T = 1e4
+    else:
+            T = int(float(sys.argv[3]))
+    if len(sys.argv) < 3:
+            sampleClassifierRatio = 0.3
+    else:
+            sampleClassifierRatio = float(sys.argv[2])
+    if len(sys.argv) < 2:
+            data_npy = 'breast-cancer'
+    else:
+            data_npy = sys.argv[1]
+
+    print('Training {} with parameters with {}% stumps for {} iterations ...'.format(data_npy, sampleClassifierRatio*100, T))
+    seed = 0
+    g = adaBoost(data_npy + '_train0.npy', (0, sampleClassifierRatio), T, seed, loglevel)
+    error, y_predict, y, errors= predict(g, data_npy + '_test0.npy')
+    print('The error for {} was: {}'.format(data_npy+'_test0.npy', error))
 
