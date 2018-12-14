@@ -11,7 +11,7 @@ def generate_baseclassifiers(file, n):
 	@ Return: 2D array of feature x threshold
 	"""
 	data, n = np.load(file), int(n)
-	feature_ranges,	N_feats = np.zeros((2,data.shape[1])),data.shape[1]-1
+	feature_ranges,	N_feats = np.zeros((2,data.shape[1]-1)),data.shape[1]-1
 	for j in range(N_feats):
 		for i in range(data.shape[0]):
 			if data[i,j+1] < feature_ranges[0,j]:
@@ -19,7 +19,7 @@ def generate_baseclassifiers(file, n):
 			elif data[i,j+1] > feature_ranges[1,j]:
 				feature_ranges[1,j] = data[i,j+1]
 
-	classifiers = np.zeros((n,N_feats+1))
+	classifiers = np.zeros((n,N_feats)) # first column of data is labels!
 
 	for k in range(N_feats):
 		classifiers[:,k] = np.transpose(np.linspace(feature_ranges[0,k], feature_ranges[1,k], n))
