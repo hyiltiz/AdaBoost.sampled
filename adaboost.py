@@ -28,15 +28,18 @@ def adaBoost(data_npy='breast-cancer_train0.npy', sampleRatio=(0,0), T=int(1e2),
     a=np.zeros(T)
     for t in range(0,T):
         e_t, h_t, errors = evalToPickClassifier(stumps, D_t, data, sampleRatio, seed)
-        h.append(h_t[1]) # only need the tuple, not the errors
+        h.append(h_t[0:2]) # keep the errors
 #       import pdb; pdb.set_trace()
         a[t] = 1.0/2 * np.log(1/e_t-1)
         # not keeping track of D_t,Z_t history to optimize for memory
         Z_t = 2*np.sqrt(e_t*(1-e_t))
         D_t = D_t * np.exp(a[t]*(2*errors-1))/Z_t # errors := (-y * h_i_x+1)/2
 
-#   import pdb; pdb.set_trace()
-    g = [(hi[0], hi[1], a[i]) for i, hi in enumerate(h)]
+    g = [(hi[1][0], hi[1][1], a[i]) for i, hi in enumerate(h)]
+    output = predict(g, data_npy)
+    h.append((output[0], (-999, -999, -999)))
+    import pdb; pdb.set_trace()
+    writeStumps2CSV(h, data_npy + '_ensemble')
     return g
 
 def createBoostingStumps(data):
@@ -67,19 +70,22 @@ def createBoostingStumps(data):
 
     return baseClassifiers
 
+
 def writeStumps2CSV(stumps, data_npy):
-    stumpsTable = np.zeros((len(stumps), 5))
+    # stumpsTable = np.zeros((len(stumps), 5))
+    stumpsTable = np.zeros((len(stumps), 4))
     for iStump in range(len(stumps)):
             stumpsTable[iStump,:] = np.hstack((
                     np.array(stumps[iStump][0]), # weighted_error
-                    np.array(stumps[iStump][1]), # stumps (threshold, feature*direction, alpha)
-                    np.sum(stumps[iStump][2])/stumps[iStump][2].shape[0] # error
+                    np.array(stumps[iStump][1])  # stumps (threshold, feature*direction, alpha)
+                    # np.sum(stumps[iStump][2])/stumps[iStump][2].shape[0] # raw error; not needed
             ))
 
     # 0.5-weighted_error=gamma when D_t is uniform, i.e. for base classifiers
     # this does not hold for g, i.e. post training classifiers
     np.savetxt(data_npy + '_stumps.log.csv', stumpsTable, delimiter=',', newline='\n', comments='',
-                  header='weighted_error, threshold, feature, weight_alpha, error')
+                  # header='weighted_error, threshold, feature, weight_alpha, error')
+                  header='weighted_error, threshold, feature, weight_alpha')
 
 
 def evalToPickClassifier(stumps, D_t, data, sampleRatio, seed):
@@ -152,8 +158,9 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
         h_x[:,iStump] = weight*((errors+0)*2-1)
 
     y_predict = np.sign(np.sum(h_x, 1))
+    errors = (y != y_predict+0)*2-1
     error = np.sum(y != y_predict)/y.shape[0]
-    return error, y_predict,y
+    return error, y_predict, y, errors
 
 
 if __name__ == '__main__':
