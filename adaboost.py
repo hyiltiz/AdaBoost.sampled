@@ -186,13 +186,17 @@ if __name__ == '__main__':
         error = predict(g, test_data_npy='breast-cancer_test0.npy', )
     elif  len(sys.argv) == 3:
             seed = 0
+            print('Learning...')
             g = adaBoost(sys.argv[1] + '_train0.npy', (0, float(sys.argv[2])), int(1e4), seed)
+            print('Prediciting...')
             error, y_predict, y, errors= predict(g, sys.argv[1] + '_test0.npy')
             print('The error for {} was: {}'.format(sys.argv[1]+'_test0.npy', error))
     elif len(sys.argv) >= 5:
             loglevel = getattr(logging, sys.argv[5][6:].upper())
             seed = 0
+            print('Learning...')
             g = adaBoost(sys.argv[1] + '_train0.npy', (0, float(sys.argv[2])), int(float(sys.argv[3])), int(sys.argv[4]), loglevel)
+            print('Predicting...')
             error, y_predict, y, errors= predict(g, sys.argv[1] + '_test0.npy')
             print('The error for {} was: {}'.format(sys.argv[1]+'_test0.npy', error))
     else:
