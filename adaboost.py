@@ -183,7 +183,7 @@ if __name__ == '__main__':
         "\n" + "python2 adaboost.py breast-cancer 0.25" + \
         "\n" + "python2 adaboost.py breast-cancer 0.25 1e4" + \
         "\n" + "python2 adaboost.py cod-rna 0.3 1e4 1234" + \
-        "\n" + "python2 adaboost.py cod-rna 0.3 1e4 1234 --log=INFO" + \
+        "\n" + "python2 adaboost.py cod-rna 0.3 1e4 1234 --log=INFO"
     print('-----------------------------------\n')
     if len(sys.argv) < 6:
             loglevel = 0
