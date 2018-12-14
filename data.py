@@ -27,8 +27,16 @@ def read(file):
 				dataline_list[j+1] = dataline_list[j+1][2:]
 		datarray[i,:] = dataline_list
 	# normalize the data into [-1,1]
-	scale = lambda x: (x-np.min(x))/(np.max(x)-np.min(x))*2-1
-	return scale(datarray)
+	scale = lambda x: (x-np.min(x,0))/(np.max(x,0)-np.min(x,0))*2-1
+
+#	import pdb; pdb.set_trace()
+	# Do not scale class labels
+#	datarray = np.column_stack([datarray[:,0], scale(datarray[:,1:])])
+
+	# scale class labels as well
+	# breast-cancer has labels of 2, 4
+	datarray = scale(datarray)
+	return datarray
 
 def split(file, seed=0, p_train=0.8):
 	"""
