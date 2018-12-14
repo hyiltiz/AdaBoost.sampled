@@ -21,22 +21,21 @@ def adaBoost(data_npy='breast-cancer_test0.npy', sampleRatio=(0,0), T=int(1e4), 
 
 	stumps = createBoostingStumps(data)
 
-
 	# AdaBoost algorithm
 	D_t = np.zeros(m_samples)+1.0/m_samples
 	h=[]
 	a=np.zeros(T)
 	for t in range(0,T):
-		e_t, h_t, h_t_x = evalToPickClassifier(stumps, D_t, data, sampleRatio, seed)
-		h.append(h_t)
+		e_t, h_t, errors = evalToPickClassifier(stumps, D_t, data, sampleRatio, seed)
+		h.append(h_t[1]) # only need the tuple, not the errors
 #		import pdb; pdb.set_trace()
 		a[t] = 1.0/2 * np.log(1/e_t-1)
 		# not keeping track of D_t,Z_t history to optimize for memory
 		Z_t = 2*np.sqrt(e_t*(1-e_t))
-		D_t = D_t * np.exp(-a[t]*data[:,0] * h_t_x)/Z_t
+		D_t = D_t * np.exp(a[t]*(2*errors-1))/Z_t # errors := (-y * h_i_x+1)/2
 
 	import pdb; pdb.set_trace()
-	g = np.prod(a, h) # NOTE: psudocode
+	g = [(hi[0], hi[1], a[i]) for i, hi in enumerate(h)]
 	return g
 
 def createBoostingStumps(data):
@@ -56,8 +55,9 @@ def createBoostingStumps(data):
 			h_i_x = ((thresholds >= iThreshold)+0)*2-1
 			errors = (-y * h_i_x+1)/2
 			weighted_error = sum(D_t * (-y * h_i_x+1)/2)
-			if error > 0.5:
-				iDirection = -1 # invert the classifier
+			if weighted_error > 0.5:
+				iDirection = -iDirection # invert the classifier
+				errors = 1-errors
 			weight = 1.0
 			baseClassifiers.append((weighted_error, (iThreshold, iDirection*iFeature,weight), errors))
 
@@ -67,9 +67,10 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, seed):
 	"""
 	This function currently samples the data. Could also sample the classifiers.
 	"""
-	import pdb; pdb.set_trace()
 	np.random.seed(seed)
 	sampleDataRatio, sampleClassifierRatio = sampleRatio
+
+	# NOTE: sampling data is not implemented yet
 	if sampleDataRatio == 0:
 		# treat these the same: no sampling or sample everything
 		sampleDataRatio == 1
@@ -77,26 +78,28 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, seed):
 
 	if sampleClassifierRatio == 0:
 	# treat these the same: no sampling or sample everything
-		sampleClassifie
-	index_classifiers = np.random.rand(1, len(classifiers)) < sampleClassifierRatio
-	index_classifiers_list = np.ndarray.tolist(np.where(index_classifiers)[0])
+		sampleClassifierRatio = 1
+#	import pdb; pdb.set_trace()
+	index_classifiers = np.random.rand(1, len(stumps)) < sampleClassifierRatio
+	index_classifiers_list = np.ndarray.tolist(np.where(index_classifiers)[1])
 
 	y = data[:,0]
 	# D_t = 1.0/data.shape[0]
 
 	# evaluate a subset of classifiers
 	# keeping track of the smallest error
-	bestInSample = (nan,1)
+	bestInSample = (-1,1)
 	for iStump in index_classifiers_list: # 0th column is the label
 		# load a classifier
 		iThreshold,temp,weight = stumps[iStump][1]
 		iFeature = np.abs(temp)
-		iDirection = temp > 0
+		iDirection = np.sign(temp)
 		errors = stumps[iStump][2]
 
 		weighted_error = sum(D_t * errors)
 		if weighted_error > 0.5:
 			iDirection = -iDirection # invert the classifier
+			errors = 1 - errors
 			weighted_error = 1 - weighted_error
 
 		if weighted_error < bestInSample[1]:
@@ -106,13 +109,14 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, seed):
 		weight = 1.0
 		stumps[iStump] = (weighted_error, (iThreshold, iDirection*iFeature,weight), errors)
 
-	return bestInSample[1], stumps[bestInSample[0]], errors
+	return bestInSample[1], stumps[bestInSample[0]], stumps[bestInSample[0]][2]
+
 
 if __name__ == '__main__':
 	if len(sys.argv) >= 0:
-	adaBoost()
+		adaBoost()
 	else:
 		print "Use command 'python <file-name> train.npy (0.1,0.3) 0'" + \
-			  "\n" + "to run adaBoost with threshold functions as base classifiers on" +\
-			  "\n" + "the dataset in train.npy. At each epoch, 10% of the data are used." +\
-			  "\n" + "and 30% of the classifiers are being evaluated."
+			"\n" + "to run adaBoost with threshold functions as base classifiers on" +\
+			"\n" + "the dataset in train.npy. At each epoch, 10% of the data are used." +\
+			"\n" + "and 30% of the classifiers are being evaluated."
