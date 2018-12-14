@@ -7,7 +7,7 @@ import logging
 # use this to debug
 # import pdb; pdb.set_trace()
 
-def adaBoost(data_npy='breast-cancer_train0.npy', sampleRatio=(0,0), T=int(1e2), seed=0):
+def adaBoost(data_npy='breast-cancer_train0.npy', sampleRatio=(0,0), T=int(1e2), seed=0, loglevel=0):
     """Takes an input data file storing numpy array and a function that generates
     base classifiers, evaluates all base classifiers when isSample is False,
     and runs classic AdaBoost.
@@ -19,7 +19,7 @@ def adaBoost(data_npy='breast-cancer_train0.npy', sampleRatio=(0,0), T=int(1e2),
 #   import pdb; pdb.set_trace()
     data = np.load(data_npy)
     m_samples = data.shape[0]
-    logging.basicConfig(format='%(message)s', filename=data_npy + 'classifiers_history.log')
+    logging.basicConfig(format='%(message)s', filename=data_npy + 'classifiers_history.log', level=loglevel)
     logging.info('weighted_error, threshold, feature_direction, iteration')
 
     stumps = createBoostingStumps(data)
@@ -162,7 +162,7 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
             errors = 1 - errors
         h_x[:,iStump] = weight*((errors+0)*2-1)
 
-    import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
     y_predict = np.sign(np.sum(h_x, 1))
     errors = (y != y_predict+0)*2-1
     error = np.sum(y != y_predict)/y.shape[0]
@@ -190,8 +190,9 @@ if __name__ == '__main__':
             error, y_predict, y, errors= predict(g, sys.argv[1] + '_test0.npy')
             print('The error for {} was: {}'.format(sys.argv[1]+'_test0.npy', error))
     elif len(sys.argv) >= 5:
+            loglevel = getattr(logging, sys.argv[5][6:].upper())
             seed = 0
-            g = adaBoost(sys.argv[1] + '_train0.npy', (0, float(sys.argv[2])), int(float(sys.argv[3])), int(sys.argv[4]))
+            g = adaBoost(sys.argv[1] + '_train0.npy', (0, float(sys.argv[2])), int(float(sys.argv[3])), int(sys.argv[4]), loglevel)
             error, y_predict, y, errors= predict(g, sys.argv[1] + '_test0.npy')
             print('The error for {} was: {}'.format(sys.argv[1]+'_test0.npy', error))
     else:
