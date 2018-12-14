@@ -2,6 +2,7 @@ import numpy as np
 import sys
 import warnings
 from hypothesis import generate_baseclassifiers
+import logging
 
 # use this to debug
 # import pdb; pdb.set_trace()
@@ -18,6 +19,8 @@ def adaBoost(data_npy='breast-cancer_train0.npy', sampleRatio=(0,0), T=int(1e2),
 #   import pdb; pdb.set_trace()
     data = np.load(data_npy)
     m_samples = data.shape[0]
+    logging.basicConfig(format='%(message)s', filename=data_npy + 'classifiers_history.log')
+    logging.info('weighted_error, threshold, feature_direction, iteration')
 
     stumps = createBoostingStumps(data)
     writeStumps2CSV(stumps, data_npy)
@@ -27,7 +30,7 @@ def adaBoost(data_npy='breast-cancer_train0.npy', sampleRatio=(0,0), T=int(1e2),
     h=[]
     a=np.zeros(T)
     for t in range(0,T):
-        e_t, h_t, errors = evalToPickClassifier(stumps, D_t, data, sampleRatio, seed)
+        e_t, h_t, errors = evalToPickClassifier(stumps, D_t, data, sampleRatio, seed, t)
         h.append(h_t[0:2]) # keep the errors
 #       import pdb; pdb.set_trace()
         a[t] = 1.0/2 * np.log(1/e_t-1)
@@ -38,7 +41,7 @@ def adaBoost(data_npy='breast-cancer_train0.npy', sampleRatio=(0,0), T=int(1e2),
     g = [(hi[1][0], hi[1][1], a[i]) for i, hi in enumerate(h)]
     output = predict(g, data_npy)
     h.append((output[0], (-999, -999, -999)))
-    import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
     writeStumps2CSV(h, data_npy + '_ensemble')
     return g
 
@@ -67,6 +70,7 @@ def createBoostingStumps(data):
             # weighted_error weights classification errors by D_t
             # Here D_t is uniform to create the stumps
             baseClassifiers.append((weighted_error, (iThreshold, iDirection*iFeature,weight), errors))
+            logging.info('{}, {}, {}, {}'.format(weighted_error, iThreshold, iDirection*iFeature, 0))
 
     return baseClassifiers
 
@@ -88,7 +92,7 @@ def writeStumps2CSV(stumps, data_npy):
                   header='weighted_error, threshold, feature, weight_alpha')
 
 
-def evalToPickClassifier(stumps, D_t, data, sampleRatio, seed):
+def evalToPickClassifier(stumps, D_t, data, sampleRatio, seed, t):
     """
     This function currently samples the data. Could also sample the classifiers.
     """
@@ -134,6 +138,7 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, seed):
         # update this classifier
         weight = 1.0
         stumps[iStump] = (weighted_error, (iThreshold, iDirection*iFeature,weight), errors)
+        logging.info('{}, {}, {}, {}'.format(weighted_error, iThreshold, iDirection*iFeature, t))
 
     return bestInSample[1], stumps[bestInSample[0]], stumps[bestInSample[0]][2]
 
@@ -166,12 +171,13 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
 if __name__ == '__main__':
     # import pdb; pdb.set_trace()
     if len(sys.argv) == 1:
-        print "Use command 'python2 adaboost.py <data> 0.3 1e4 0'" + \
+        print "Use command 'python2 adaboost.py <data> 0.3 1e4 0 [--log=INFO]'" + \
             "\n" + "to run adaBoost with threshold functions as base classifiers on" + \
             "\n" + "the dataset in <data>_train0.npy then test <data>_test0.npy." + \
-            "\n" + "At each iteration of the 1e4 total iterations," +\
+            "\n" + "At each iteration of the 1e4 total iterations," + \
             "\n" + "only 30% of the classifiers are evaluated randomly selected with seed 0." + \
-            "\n" + "You can also only provide the <data> to keep the rest as default, or everything except the seed."
+            "\n" + "You can also only provide the <data> to keep the rest as default, or everything except the seed." + \
+            "\n" + "Use --log=INFO to enable logging classifiers at each iteration to inspect gamma."
         print('-----------------------------------')
         print('Learning with default parameters...')
         g = adaBoost()
@@ -182,15 +188,17 @@ if __name__ == '__main__':
             g = adaBoost(sys.argv[1] + '_train0.npy', (0, float(sys.argv[2])), int(1e4), seed)
             error = predict(g, sys.argv[1] + '_test0.npy')
             print('The error for {} was: {}'.format(sys.argv[1]+'_test0.npy', error))
-    elif len(sys.argv) == 5:
+    elif len(sys.argv) >= 5:
             seed = 0
-            g = adaBoost(sys.argv[1] + '_train0.npy', (0, float(sys.argv[2])), int(sys.argv[3]), float(sys.argv[4]))
+            g = adaBoost(sys.argv[1] + '_train0.npy', (0, float(sys.argv[2])), int(float(sys.argv[3])), int(sys.argv[4]))
             error = predict(g, sys.argv[1] + '_test0.npy')
             print('The error for {} was: {}'.format(sys.argv[1]+'_test0.npy', error))
     else:
-        print "Use command 'python2 adaboost.py <data> 0.3 1e4 0'" + \
+        print "Use command 'python2 adaboost.py <data> 0.3 1e4 0 [--log=INFO]'" + \
             "\n" + "to run adaBoost with threshold functions as base classifiers on" + \
             "\n" + "the dataset in <data>_train0.npy then test <data>_test0.npy." + \
-            "\n" + "At each iteration of the 1e4 total iterations," +\
+            "\n" + "At each iteration of the 1e4 total iterations," + \
             "\n" + "only 30% of the classifiers are evaluated randomly selected with seed 0." + \
-            "\n" + "You can also only provide the <data> to keep the rest as default, or everything except the seed."
+            "\n" + "You can also only provide the <data> to keep the rest as default, or everything except the seed." + \
+            "\n" + "Use --log=INFO to enable logging classifiers at each iteration to inspect gamma."
+
