@@ -17,7 +17,7 @@ def adaBoost(data_npy='breast-cancer_test0.npy', sampleRatio=(0,0), T=int(1e4), 
 	"""
 #	import pdb; pdb.set_trace()
 	data = np.load(data_npy)
-	m_samples, N_feats = data.shape
+	m_samples = data.shape[0]
 
 	thresholds = generate_baseclassifiers(data_npy, 1e2)
 	directions = np.zeros(thresholds.shape, int)
@@ -34,7 +34,7 @@ def adaBoost(data_npy='breast-cancer_test0.npy', sampleRatio=(0,0), T=int(1e4), 
 		a[t] = 1.0/2 * np.log(1/e_t-1)
 		# not keeping track of D_t,Z_t history to optimize for memory
 		Z_t = 2*np.sqrt(e_t*(1-e_t))
-		D_t = D_t * np.exp(-a[t]*data[:,0] * h_t_x)
+		D_t = D_t * np.exp(-a[t]*data[:,0] * h_t_x)/Z_t
 
 	import pdb; pdb.set_trace()
 	g = np.prod(a, h) # NOTE: psudocode
@@ -58,6 +58,7 @@ def evalToPickClassifier(classifiers, D_t, data, sampleRatio, seed):
 #		sampleClassifierRatio == 1
 #	index_classifiers = np.random.rand(1, classifiers.shape[1]-1) < sampleClassifierRatio # NOTE: shape is wrong
 #
+#	N_feats = data.shape[1]-1 - 1 # 1st column is labels
 #	# only use the subsets
 #	isCorrect = compare(data[index_data], classifiers[index_classifiers]) # NOTE: to be implemented
 #	error = np.sum(not isCorrect)
