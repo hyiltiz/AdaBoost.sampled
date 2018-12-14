@@ -15,20 +15,19 @@ def adaBoost(data_npy='breast-cancer_test0.npy', sampleRatio=(0,0), T=int(1e4), 
 	returns a prediction
 
 	"""
-#	import pdb; pdb.set_trace()
+	import pdb; pdb.set_trace()
 	data = np.load(data_npy)
 	m_samples = data.shape[0]
 
-	thresholds = generate_baseclassifiers(data_npy, 1e2)
-	directions = np.zeros(thresholds.shape, int)
-	classifiers = (thresholds, directions)
+	stumps = createBoostingStumps(data)
+
 
 	# AdaBoost algorithm
 	D_t = np.zeros(m_samples)+1.0/m_samples
 	h=[]
 	a=np.zeros(T)
 	for t in range(0,T):
-		e_t, h_t, h_t_x = evalToPickClassifier(classifiers, D_t, data, sampleRatio, seed)
+		e_t, h_t, h_t_x = evalToPickClassifier(stumps, D_t, data, sampleRatio, seed)
 		h.append(h_t)
 #		import pdb; pdb.set_trace()
 		a[t] = 1.0/2 * np.log(1/e_t-1)
@@ -40,6 +39,28 @@ def adaBoost(data_npy='breast-cancer_test0.npy', sampleRatio=(0,0), T=int(1e4), 
 	g = np.prod(a, h) # NOTE: psudocode
 	return g
 
+def createBoostingStumps(data):
+	"""
+	Create boosting stumps, i.e. axis aligned thresholds for each features.
+	Sorts the data first and uses the sorted values for each component to
+	construct the thresholds. Has complexity O(mNlogm).
+	"""
+#	import pdb; pdb.set_trace()
+	baseClassifiers = []
+	y = data[:,0]
+	D_t = 1.0/data.shape[0]
+	for iFeature in range(1,data.shape[1]): # 0th column is the label
+		thresholds = np.sort(data[:,iFeature])
+		for iThreshold in thresholds:
+			iDirection = +1
+			h_i_x = ((thresholds >= iThreshold)+0)*2-1
+			error = sum(D_t * (-y * h_i_x+1)/2)
+			if error > 0.5:
+				iDirection = -1 # invert the classifier
+			weight = 1.0
+			baseClassifiers.append((error, (iThreshold, iDirection*iFeature,weight)))
+
+	return baseClassifiers
 
 def evalToPickClassifier(classifiers, D_t, data, sampleRatio, seed):
 	"""
