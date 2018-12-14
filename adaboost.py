@@ -6,7 +6,7 @@ from hypothesis import generate_baseclassifiers
 # use this to debug
 # import pdb; pdb.set_trace()
 
-def adaBoost(data_npy='breast-cancer_train0.npy', sampleRatio=(0,0), T=int(1e4), seed=0):
+def adaBoost(data_npy='breast-cancer_train0.npy', sampleRatio=(0,0), T=int(1e2), seed=0):
 	"""Takes an input data file storing numpy array and a function that generates
 	base classifiers, evaluates all base classifiers when isSample is False,
 	and runs classic AdaBoost.
@@ -15,7 +15,7 @@ def adaBoost(data_npy='breast-cancer_train0.npy', sampleRatio=(0,0), T=int(1e4),
 	returns a prediction
 
 	"""
-	import pdb; pdb.set_trace()
+#	import pdb; pdb.set_trace()
 	data = np.load(data_npy)
 	m_samples = data.shape[0]
 
@@ -34,7 +34,7 @@ def adaBoost(data_npy='breast-cancer_train0.npy', sampleRatio=(0,0), T=int(1e4),
 		Z_t = 2*np.sqrt(e_t*(1-e_t))
 		D_t = D_t * np.exp(a[t]*(2*errors-1))/Z_t # errors := (-y * h_i_x+1)/2
 
-	import pdb; pdb.set_trace()
+#	import pdb; pdb.set_trace()
 	g = [(hi[0], hi[1], a[i]) for i, hi in enumerate(h)]
 	return g
 
@@ -113,22 +113,22 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, seed):
 
 	return bestInSample[1], stumps[bestInSample[0]], stumps[bestInSample[0]][2]
 
-def predict(test_data_npy='breast-cancer_test0.npy', g):
+def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
 	"""
 	Use the learned stumps (thresholds for features and their directions) to
 	predict labels for new data.
-	NOTE: Not tested yet.
 	"""
-	data = np.load(data_npy)
+	import pdb; pdb.set_trace()
+	data = np.load(test_data_npy)
 	y = data[:,0]
-	D_t = 1.0/data.shape[0]
-	h_x = np.zeros(data.shape[0], len(g))
-	for iStump in range(len(g)): # 0th column is the label
-		iThreshold,temp,weight = g[iStump]
+	h_x = np.zeros((data.shape[0], len(learnedClassifiers)))
+	for iStump in range(len(learnedClassifiers)): # 0th column is the label
+		iThreshold,temp,weight = learnedClassifiers[iStump]
 		iDirection = np.sign(temp)
 		iFeature = np.abs(temp)
 
-		errors = data[:,iFeature] >= iThreshold
+		h_i_x =( data[:,iFeature] >= iThreshold+0)*2-1
+		errors = (-y * h_i_x+1)/2
 		if iDirection < 0:
 			errors = 1 - errors
 		h_x[:,iStump] = weight*((errors+0)*2-1)
@@ -141,7 +141,7 @@ if __name__ == '__main__':
 		print('Learning...')
 		g = adaBoost()
 		print('Predicting...')
-		predict(g=g)
+		predict(g, test_data_npy='breast-cancer_test0.npy', )
 	else:
 		print "Use command 'python <file-name> train.npy (0.1,0.3) 0'" + \
 			"\n" + "to run adaBoost with threshold functions as base classifiers on" +\
