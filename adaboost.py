@@ -162,6 +162,7 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
             errors = 1 - errors
         h_x[:,iStump] = weight*((errors+0)*2-1)
 
+    import pdb; pdb.set_trace()
     y_predict = np.sign(np.sum(h_x, 1))
     errors = (y != y_predict+0)*2-1
     error = np.sum(y != y_predict)/y.shape[0]
@@ -186,12 +187,12 @@ if __name__ == '__main__':
     elif  len(sys.argv) == 3:
             seed = 0
             g = adaBoost(sys.argv[1] + '_train0.npy', (0, float(sys.argv[2])), int(1e4), seed)
-            error = predict(g, sys.argv[1] + '_test0.npy')
+            error, y_predict, y, errors= predict(g, sys.argv[1] + '_test0.npy')
             print('The error for {} was: {}'.format(sys.argv[1]+'_test0.npy', error))
     elif len(sys.argv) >= 5:
             seed = 0
             g = adaBoost(sys.argv[1] + '_train0.npy', (0, float(sys.argv[2])), int(float(sys.argv[3])), int(sys.argv[4]))
-            error = predict(g, sys.argv[1] + '_test0.npy')
+            error, y_predict, y, errors= predict(g, sys.argv[1] + '_test0.npy')
             print('The error for {} was: {}'.format(sys.argv[1]+'_test0.npy', error))
     else:
         print "Use command 'python2 adaboost.py <data> 0.3 1e4 0 [--log=INFO]'" + \
