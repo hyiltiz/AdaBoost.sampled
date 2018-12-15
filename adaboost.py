@@ -1,6 +1,6 @@
 import numpy as np
+import matplotlib.pyplot as plt
 import sys
-import warnings
 from hypothesis import generate_baseclassifiers
 import logging
 
@@ -16,7 +16,7 @@ def adaBoost(data_npy='breast-cancer_train0.npy', sampleRatio=(0,0), T=int(1e2),
     returns a prediction
 
     """
-#   import pdb; pdb.set_trace()
+    import pdb; pdb.set_trace()
     data = np.load(data_npy)
     m_samples = data.shape[0]
     logging.basicConfig(format='%(message)s', filename=data_npy + 'classifiers_history.log', level=loglevel)
@@ -51,7 +51,7 @@ def createBoostingStumps(data):
     Sorts the data first and uses the sorted values for each component to
     construct the thresholds. Has complexity O(mNlogm).
     """
-#   import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
     baseClassifiers = []
     y = data[:,0]
     D_t = 1.0/data.shape[0]
@@ -62,10 +62,11 @@ def createBoostingStumps(data):
             iDirection = +1
             h_i_x = ((thresholds >= iThreshold)+0)*2-1
             errors = (-y * h_i_x+1)/2
-            weighted_error = sum(D_t * (-y * h_i_x+1)/2)
+            weighted_error = sum(D_t * errors)
             if weighted_error > 0.5:
                 iDirection = -iDirection # invert the classifier
                 errors = 1-errors
+                weighted_error = sum(D_t * errors)
             weight = 1.0 # stores alpha, not used until predict() i.e. until adaBoost() finishes training
             # weighted_error weights classification errors by D_t
             # Here D_t is uniform to create the stumps
@@ -73,24 +74,6 @@ def createBoostingStumps(data):
             logging.info('{}, {}, {}, {}'.format(weighted_error, iThreshold, iDirection*iFeature, 0))
 
     return baseClassifiers
-
-
-def writeStumps2CSV(stumps, data_npy):
-    # stumpsTable = np.zeros((len(stumps), 5))
-    stumpsTable = np.zeros((len(stumps), 4))
-    for iStump in range(len(stumps)):
-            stumpsTable[iStump,:] = np.hstack((
-                    np.array(stumps[iStump][0]), # weighted_error
-                    np.array(stumps[iStump][1])  # stumps (threshold, feature*direction, alpha)
-                    # np.sum(stumps[iStump][2])/stumps[iStump][2].shape[0] # raw error; not needed
-            ))
-
-    # 0.5-weighted_error=gamma when D_t is uniform, i.e. for base classifiers
-    # this does not hold for g, i.e. post training classifiers
-    np.savetxt(data_npy + '_stumps.log.csv', stumpsTable, delimiter=',', newline='\n', comments='',
-                  # header='weighted_error, threshold, feature, weight_alpha, error')
-                  header='weighted_error, threshold, feature, weight_alpha')
-
 
 def evalToPickClassifier(stumps, D_t, data, sampleRatio, seed, t):
     """
@@ -130,7 +113,7 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, seed, t):
         if weighted_error > 0.5:
             iDirection = -iDirection # invert the classifier
             errors = 1 - errors
-            weighted_error = 1 - weighted_error
+            weighted_error = sum(D_t * errors)
 
         if weighted_error < bestInSample[1]:
             bestInSample = (iStump, weighted_error)
@@ -167,6 +150,24 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
     errors = (y != y_predict+0)*2-1
     error = np.sum(y != y_predict)/y.shape[0]
     return error, y_predict, y, errors
+
+def writeStumps2CSV(stumps, data_npy):
+    # stumpsTable = np.zeros((len(stumps), 5))
+    stumpsTable = np.zeros((len(stumps), 4))
+    for iStump in range(len(stumps)):
+            stumpsTable[iStump,:] = np.hstack((
+                    np.array(stumps[iStump][0]), # weighted_error
+                    np.array(stumps[iStump][1])  # stumps (threshold, feature*direction, alpha)
+                    # np.sum(stumps[iStump][2])/stumps[iStump][2].shape[0] # raw error; not needed
+            ))
+
+    # 0.5-weighted_error=gamma when D_t is uniform, i.e. for base classifiers
+    # this does not hold for g, i.e. post training classifiers
+    np.savetxt(data_npy + '_stumps.log.csv', stumpsTable, delimiter=',', newline='\n', comments='',
+                  # header='weighted_error, threshold, feature, weight_alpha, error')
+                  header='weighted_error, threshold, feature, weight_alpha')
+    plt.hist(0.5 - stumpsTable[:,0])
+    plt.ylabel('gamma')
 
 
 if __name__ == '__main__':
