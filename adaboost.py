@@ -35,7 +35,7 @@ def adaBoost(data_npy='breast-cancer_train0.npy', sampleRatio=(0,0), T=int(1e2),
     for t in range(0,T):
         e_t, h_t, errors = evalToPickClassifier(stumps, D_t, data, sampleRatio, seed, t)
         h.append(h_t[0:2]) # keep the errors
-#       import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         a[t] = 1.0/2 * np.log(1/e_t-1)
         # not keeping track of D_t,Z_t history to optimize for memory
         Z_t = 2*np.sqrt(e_t*(1-e_t))
@@ -54,7 +54,7 @@ def createBoostingStumps(data):
     Sorts the data first and uses the sorted values for each component to
     construct the thresholds. Has complexity O(mNlogm).
     """
-    import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
     baseClassifiers = []
     y = data[:,0]
     D_t = 1.0/data.shape[0]
@@ -94,7 +94,7 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, seed, t):
     if sampleClassifierRatio == 0:
     # treat these the same: no sampling or sample everything
         sampleClassifierRatio = 1
-#   import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
     index_classifiers = np.random.rand(1, len(stumps)) < sampleClassifierRatio
     index_classifiers_list = np.ndarray.tolist(np.where(index_classifiers)[1])
 
@@ -148,7 +148,7 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
             errors = 1 - errors
         h_x[:,iStump] = weight*((errors+0)*2-1) # weighted
 
-    import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
     y_predict = np.sign(np.sum(h_x, 1))         # majority
     errors =((y != y_predict)+0.0)*2-1
     error = np.sum((y != y_predict)+0.0)/y.shape[0]
@@ -214,9 +214,22 @@ if __name__ == '__main__':
 
     print('Training {} with {}% stumps for {} iterations ...'.format(data_npy, sampleClassifierRatio*100, T))
     g = adaBoost(data_npy + '_train0.npy', (0, sampleClassifierRatio), T, seed, loglevel)
-    error, y_predict, y, errors= predict(g, data_npy + '_test0.npy')
-    print('The error for {} was: {}'.format(data_npy+'_test0.npy', error))
+    error_history = np.zeros((len(g), 3))
+    for i in range(1,len(g)+1):
+        error_train, y_predict, y, errors= predict(g[0:i], data_npy + '_train0.npy')
+        error_test, y_predict, y, errors= predict(g[0:i], data_npy + '_test0.npy')
+        error_history[i-1,:] = np.array([i, error_train, error_test])
+        
+    filename='{}_ensemble_history_seed{}_sampleRatio{}_{}.csv'.format(data_npy, seed, sampleClassifierRatio, datetime.datetime.now().isoformat())
+    np.savetxt(filename, error_history, delimiter=',', header='iteration, train-error, test-error', comments = '')
+    import pdb; pdb.set_trace()
+    print('The error for {} was: {}'.format(data_npy+'_test0.npy', error_test))
 
-    # to plot the history
+    # to plot the history of gamma
     # x = np.loadtxt('breast-cancer_train0.npyclassifiers_history_seed0_sampleRatio1.0_2018-12-14T20:42:40.856094.log', delimiter = ',', skiprows = 1)
     # plt.scatter(x[:,3], x[:,0], s=0.1),plt.xlabel('Iterations'),plt.ylabel('Errors'),plt.title('Training history for breast-cancer dataset')
+    
+    # to plot the history of the errors
+    # x = np.loadtxt('breast-cancerensemble_history_seed0_sampleRatio1.0_2018-12-14T21:53:13.009959.csv', delimiter = ',', skiprows = 1)
+    
+    
