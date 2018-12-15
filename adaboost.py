@@ -146,12 +146,12 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
         errors = (-y * h_i_x+1)/2
         if iDirection < 0:
             errors = 1 - errors
-        h_x[:,iStump] = weight*((errors+0)*2-1)
+        h_x[:,iStump] = weight*((errors+0)*2-1) # weighted
 
-    # import pdb; pdb.set_trace()
-    y_predict = np.sign(np.sum(h_x, 1))
-    errors = (y != y_predict+0)*2-1
-    error = np.sum(y != y_predict)/y.shape[0]
+    import pdb; pdb.set_trace()
+    y_predict = np.sign(np.sum(h_x, 1))         # majority
+    errors =((y != y_predict)+0.0)*2-1
+    error = np.sum((y != y_predict)+0.0)/y.shape[0]
     return error, y_predict, y, errors
 
 def writeStumps2CSV(stumps, data_npy):
