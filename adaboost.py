@@ -197,7 +197,7 @@ if __name__ == '__main__':
     else:
             seed = int(sys.argv[4])
     if len(sys.argv) < 4:
-            T = 1e4
+            T = int(1e4)
     else:
             T = int(float(sys.argv[3]))
     if len(sys.argv) < 3:
@@ -210,7 +210,6 @@ if __name__ == '__main__':
             data_npy = sys.argv[1]
 
     print('Training {} with parameters with {}% stumps for {} iterations ...'.format(data_npy, sampleClassifierRatio*100, T))
-    seed = 0
     g = adaBoost(data_npy + '_train0.npy', (0, sampleClassifierRatio), T, seed, loglevel)
     error, y_predict, y, errors= predict(g, data_npy + '_test0.npy')
     print('The error for {} was: {}'.format(data_npy+'_test0.npy', error))
