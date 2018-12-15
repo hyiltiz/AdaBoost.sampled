@@ -16,8 +16,9 @@ def read(file):
     with open(file) as datafile:
         datalines = datafile.readlines()
         datalines = [x.strip() for x in datalines]
+    datalines = __checkdata(file)
     n_features = len(datalines[0].split())
-    datarray, datalines = np.ndarray((len(datalines),n_features)), __checkdata(file)
+    datarray = np.ndarray((len(datalines),n_features))
     for i in range(len(datalines)):
         dataline_list = datalines[i].split()
         for j in range(n_features-1):
@@ -35,6 +36,7 @@ def read(file):
 
     # scale class labels as well
     # breast-cancer has labels of 2, 4
+
     datarray = scale(datarray)
     return datarray
 
@@ -57,6 +59,7 @@ def split(file, seed=0, p_train=0.8):
             data_test.append(datarray[i])
         else:
             data_train.append(datarray[i])
+
     np.save((file[:-4]+ "_train" + str(seed)+".npy"), data_train)
     np.save((file[:-4]+ "_test" + str(seed) + ".npy"), data_test)
     return data_train, data_test
