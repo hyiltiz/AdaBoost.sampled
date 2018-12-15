@@ -1,7 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import sys
-from hypothesis import generate_baseclassifiers
+import datetime
 import logging
 
 # use this to debug
@@ -16,13 +16,16 @@ def adaBoost(data_npy='breast-cancer_train0.npy', sampleRatio=(0,0), T=int(1e2),
     returns a prediction
 
     """
-    import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
     data = np.load(data_npy)
     m_samples = data.shape[0]
-    logging.basicConfig(format='%(message)s', filename=data_npy + 'classifiers_history.log', level=loglevel)
+    logging.basicConfig(format='%(message)s',
+                        filename='{}classifiers_history_seed{}_sampleRatio{}_{}.log'.format(data_npy, seed, sampleRatio[1], datetime.datetime.now().isoformat()),
+                        level=loglevel)
     logging.info('weighted_error, threshold, feature_direction, iteration')
 
     stumps = createBoostingStumps(data)
+    print('Number of base classifiers: {}'.format(len(stumps)))
     writeStumps2CSV(stumps, data_npy)
 
     # AdaBoost algorithm
@@ -51,7 +54,7 @@ def createBoostingStumps(data):
     Sorts the data first and uses the sorted values for each component to
     construct the thresholds. Has complexity O(mNlogm).
     """
-    # import pdb; pdb.set_trace()
+    import pdb; pdb.set_trace()
     baseClassifiers = []
     y = data[:,0]
     D_t = 1.0/data.shape[0]
@@ -209,8 +212,11 @@ if __name__ == '__main__':
     else:
             data_npy = sys.argv[1]
 
-    print('Training {} with parameters with {}% stumps for {} iterations ...'.format(data_npy, sampleClassifierRatio*100, T))
+    print('Training {} with {}% stumps for {} iterations ...'.format(data_npy, sampleClassifierRatio*100, T))
     g = adaBoost(data_npy + '_train0.npy', (0, sampleClassifierRatio), T, seed, loglevel)
     error, y_predict, y, errors= predict(g, data_npy + '_test0.npy')
     print('The error for {} was: {}'.format(data_npy+'_test0.npy', error))
 
+    # to plot the history
+    # x = np.loadtxt('breast-cancer_train0.npyclassifiers_history_seed0_sampleRatio1.0_2018-12-14T20:42:40.856094.log', delimiter = ',', skiprows = 1)
+    # plt.scatter(x[:,3], x[:,0], s=0.1),plt.xlabel('Iterations'),plt.ylabel('Errors'),plt.title('Training history for breast-cancer dataset')
