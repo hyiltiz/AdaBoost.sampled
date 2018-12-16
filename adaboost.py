@@ -1,8 +1,14 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib import rc
 import sys
 import datetime
 import logging
+
+#rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
+## for Palatino and other serif fonts use:
+rc('font',**{'family':'serif','serif':['Palatino']})
+rc('text', usetex=True)
 
 # use this to debug
 # import pdb; pdb.set_trace()
@@ -26,7 +32,7 @@ def adaBoost(data_npy='breast-cancer_train0.npy', sampleRatio=(0,0), T=int(1e2),
 
     stumps = createBoostingStumps(data)
     print('Number of base classifiers: {}'.format(len(stumps)))
-    writeStumps2CSV(stumps, data_npy)
+    writeStumps2CSV(stumps, data_npy + '_stumps')
 
     # AdaBoost algorithm
     D_t = np.zeros(m_samples)+1.0/m_samples
@@ -147,7 +153,7 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
         if iDirection < 0:
             errors = 1 - errors
             h_i_x  = -1 * h_i_x
-        h_x[:,iStump] = weight*h_i_x # weighted
+        h_x[:,iStump] = weight*h_i_x            # weighted
 
     # import pdb; pdb.set_trace()
     y_predict = np.sign(np.sum(h_x, 1))         # majority
@@ -155,7 +161,7 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
     error = np.sum((y != y_predict)+0.0)/y.shape[0]
     return error, y_predict, y, errors
 
-def writeStumps2CSV(stumps, data_npy):
+def writeStumps2CSV(stumps, fname):
     # stumpsTable = np.zeros((len(stumps), 5))
     stumpsTable = np.zeros((len(stumps), 4))
     for iStump in range(len(stumps)):
@@ -167,11 +173,14 @@ def writeStumps2CSV(stumps, data_npy):
 
     # 0.5-weighted_error=gamma when D_t is uniform, i.e. for base classifiers
     # this does not hold for g, i.e. post training classifiers
-    np.savetxt(data_npy + '_stumps.log.csv', stumpsTable, delimiter=',', newline='\n', comments='',
+    np.savetxt(fname + '.log.csv', stumpsTable, delimiter=',', newline='\n', comments='',
                   # header='weighted_error, threshold, feature, weight_alpha, error')
                   header='weighted_error, threshold, feature, weight_alpha')
+    plt.figure()
     plt.hist(0.5 - stumpsTable[:,0])
-    plt.ylabel('gamma')
+    plt.title('Distribution of edge for ' + fname.split('_')[-1])  # last _element is the identifier
+    plt.xlabel('Classifier edge $\gamma_i$')
+    plt.ylabel('$Frequency$')
 
 
 if __name__ == '__main__':
@@ -215,22 +224,30 @@ if __name__ == '__main__':
 
     print('Training {} with {}% stumps for {} iterations ...'.format(data_npy, sampleClassifierRatio*100, T))
     g = adaBoost(data_npy + '_train0.npy', (0, sampleClassifierRatio), T, seed, loglevel)
+
+    
     error_history = np.zeros((len(g), 3))
     for i in range(1,len(g)+1):
         error_train, y_predict, y, errors= predict(g[0:i], data_npy + '_train0.npy')
         error_test, y_predict, y, errors= predict(g[0:i], data_npy + '_test0.npy')
         error_history[i-1,:] = np.array([i, error_train, error_test])
         
+    print('The error for {} was: {}'.format(data_npy+'_test0.npy', error_test))
     filename='{}_ensemble_history_seed{}_sampleRatio{}_{}.csv'.format(data_npy, seed, sampleClassifierRatio, datetime.datetime.now().isoformat())
     np.savetxt(filename, error_history, delimiter=',', header='iteration, train-error, test-error', comments = '')
-    # import pdb; pdb.set_trace()
-    print('The error for {} was: {}'.format(data_npy+'_test0.npy', error_test))
-
-    # to plot the history of gamma
-    # x = np.loadtxt('breast-cancer_train0.npyclassifiers_history_seed0_sampleRatio1.0_2018-12-14T20:42:40.856094.log', delimiter = ',', skiprows = 1)
-    # plt.scatter(x[:,3], x[:,0], s=0.1),plt.xlabel('Iterations'),plt.ylabel('Errors'),plt.title('Training history for breast-cancer dataset')
     
-    # to plot the history of the errors
-    # x = np.loadtxt('breast-cancerensemble_history_seed0_sampleRatio1.0_2018-12-14T21:53:13.009959.csv', delimiter = ',', skiprows = 1)
+    # create a plot for error history over iterations
+    plt.figure()
+    plt.plot(error_history[:,0], error_history[:,1],label='train')
+    plt.plot(error_history[:,0], error_history[:,2], label='test')
+    plt.legend()
+    plt.title('Ensemble error using ({:g}\% of stumps)'.format(sampleClassifierRatio*100))
+    plt.xlabel('Iteration $t$')
+    plt.ylabel('Error $\epsilon_t$')
     
+    ## If logs were enabled, plot erros history histribution of all evaluated classifiers during each iteration
+    #    x = np.loadtxt('breast-cancer_train0.npyclassifiers_history_seed0_sampleRatio1.0_2018-12-14T20:42:40.856094.log', delimiter = ',', skiprows = 1)
+    #    plt.scatter(error_history[:,3], error_history[:,0], s=0.1)
+    #    plt.xlabel('Iterations')
+    #    plt.ylabel('Errors'),plt.title('Training history for breast-cancer dataset')
     
