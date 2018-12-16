@@ -60,10 +60,10 @@ def createBoostingStumps(data):
     D_t = 1.0/data.shape[0]
     # NOTE: these loops can run in parallel
     for iFeature in range(1,data.shape[1]): # 0th column is the label
-        thresholds = np.sort(data[:,iFeature])
+        thresholds = np.unique(data[:,iFeature])
         for iThreshold in thresholds:
             iDirection = +1
-            h_i_x = ((thresholds >= iThreshold)+0)*2-1
+            h_i_x = ((data[:,iFeature] >= iThreshold)+0)*2-1
             errors = (-y * h_i_x+1)/2
             weighted_error = sum(D_t * errors)
             if weighted_error > 0.5:
@@ -222,7 +222,7 @@ if __name__ == '__main__':
         
     filename='{}_ensemble_history_seed{}_sampleRatio{}_{}.csv'.format(data_npy, seed, sampleClassifierRatio, datetime.datetime.now().isoformat())
     np.savetxt(filename, error_history, delimiter=',', header='iteration, train-error, test-error', comments = '')
-    import pdb; pdb.set_trace()
+    # import pdb; pdb.set_trace()
     print('The error for {} was: {}'.format(data_npy+'_test0.npy', error_test))
 
     # to plot the history of gamma
