@@ -32,8 +32,9 @@ def adaBoost(data_npy='breast-cancer_train0.npy', sampleRatio=(0,0), T=int(1e2),
     D_t = np.zeros(m_samples)+1.0/m_samples
     h=[]
     a=np.zeros(T)
+    np.random.seed(seed)
     for t in range(0,T):
-        e_t, h_t, errors = evalToPickClassifier(stumps, D_t, data, sampleRatio, seed, t)
+        e_t, h_t, errors = evalToPickClassifier(stumps, D_t, data, sampleRatio, t)
         h.append(h_t[0:2]) # keep the errors
         # import pdb; pdb.set_trace()
         a[t] = 1.0/2 * np.log(1/e_t-1)
@@ -78,11 +79,10 @@ def createBoostingStumps(data):
 
     return baseClassifiers
 
-def evalToPickClassifier(stumps, D_t, data, sampleRatio, seed, t):
+def evalToPickClassifier(stumps, D_t, data, sampleRatio, t):
     """
     This function currently samples the data. Could also sample the classifiers.
     """
-    np.random.seed(seed)
     sampleDataRatio, sampleClassifierRatio = sampleRatio
 
     # NOTE: sampling data is not implemented yet
