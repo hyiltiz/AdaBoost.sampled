@@ -79,6 +79,7 @@ def createBoostingStumps(data, loglevel):
     construct the thresholds. Has complexity O(mNlogm).
     """
     # import pdb; pdb.set_trace()
+    # we use python lists with tuples as they are actually faster in our case
     baseClassifiers = []
     y = data[:,0]
     D_t = 1.0/data.shape[0]
