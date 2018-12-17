@@ -1,6 +1,7 @@
 import numpy as np
 import sys
 import os.path
+import os
 import datetime
 import logging
 
@@ -29,18 +30,20 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0,0), T=int(1e2), seed=0, lo
 #    import pdb; pdb.set_trace()
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     pp = PdfPages(data_npy + '_results_plots_' + timestamp + '.pdf')
-    data = np.load(data_npy + '_train0.npy')
+    data = np.load(os.getcwd() + '/' + data_npy + '_train0.npy')
     m_samples = data.shape[0]
     logFilename = '{}_classifiers_history_seed{}_sampleRatio{}_{}.log'.format(data_npy, seed, sampleRatio[1], timestamp)
-    logging.basicConfig(format='%(message)s',
-                        filename=logFilename,
-                        filemode='w',
-                        level=loglevel)
-    logging.info('weighted_error, threshold, feature_direction, iteration')
+    if loglevel > 0:
+        logging.basicConfig(format='%(message)s',
+                                filename=logFilename,
+                                filemode='w',
+                                level=loglevel)
+        logging.info('weighted_error, threshold, feature_direction, iteration')
 
-    stumps = createBoostingStumps(data)
-    print('Number of base classifiers: {}'.format(len(stumps)))
-    stumpsFig = writeStumps2CSV(stumps, data_npy + '_stumps')
+    stumps = createBoostingStumps(data, loglevel)
+    nStumps = len(stumps)
+    print('Number of base classifiers: {}'.format(nStumps))
+    stumpsFig = writeStumps2CSV(stumps, data_npy + '_stumps', nStumps)
     pp.savefig(stumpsFig)
 
     # AdaBoost algorithm
@@ -49,7 +52,7 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0,0), T=int(1e2), seed=0, lo
     a=np.zeros(T)
     np.random.seed(seed)
     for t in range(0,T):
-        e_t, h_t, errors = evalToPickClassifier(stumps, D_t, data, sampleRatio, t)
+        e_t, h_t, errors = evalToPickClassifier(stumps, D_t, data, sampleRatio, t, nStumps, loglevel)
         h.append(h_t[0:2]) # keep the errors
         # import pdb; pdb.set_trace()
         a[t] = 1.0/2 * np.log(1/e_t-1)
@@ -62,14 +65,14 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0,0), T=int(1e2), seed=0, lo
     g = [(hi[1][0], hi[1][1], a[i]) for i, hi in enumerate(h)]
 
     # Save the results to a csv table and generate some plots
-    gammaHistoryFile='{}_ensemble_history_seed{}_sampleRatio{}_{}.csv'.format(data_npy, seed, sampleClassifierRatio, timestamp)
+    gammaHistoryFile='{}_ensemble_history_seed{}_sampleRatio{}_{}.csv'.format(data_npy, seed, sampleClassifierRatio, timestamp)    
     pp, error_history, logHistory = generateResults(g, h, data_npy, pp, gammaHistoryFile, logFilename)
     pp.close()
 
     # results saved, now return the ensemble
     return g
 
-def createBoostingStumps(data):
+def createBoostingStumps(data, loglevel):
     """
     Create boosting stumps, i.e. axis aligned thresholds for each features.
     Sorts the data first and uses the sorted values for each component to
@@ -80,26 +83,27 @@ def createBoostingStumps(data):
     y = data[:,0]
     D_t = 1.0/data.shape[0]
     # NOTE: these loops can run in parallel
-    for iFeature in range(1,data.shape[1]): # 0th column is the label
+    for iFeature in range(1,data.shape[1]):  # 0th column is the label
         thresholds = np.unique(data[:,iFeature])
         for iThreshold in thresholds:
             iDirection = +1
             h_i_x = ((data[:,iFeature] >= iThreshold)+0)*2-1
             errors = (-y * h_i_x+1)/2
-            weighted_error = sum(D_t * errors)
+            weighted_error = np.sum(D_t * errors)
             if weighted_error > 0.5:
                 iDirection = -iDirection # invert the classifier
                 errors = 1-errors
-                weighted_error = sum(D_t * errors)
+                weighted_error = np.sum(D_t * errors)
             weight = 1.0 # stores alpha, not used until predict() i.e. until adaBoost() finishes training
             # weighted_error weights classification errors by D_t
             # Here D_t is uniform to create the stumps
             baseClassifiers.append((weighted_error, (iThreshold, iDirection*iFeature,weight), errors))
-            logging.info('{}, {}, {}, {}'.format(weighted_error, iThreshold, iDirection*iFeature, 0))
+            if loglevel > 0:
+                logging.info('{}, {}, {}, {}'.format(weighted_error, iThreshold, iDirection*iFeature, 0))
 
     return baseClassifiers
 
-def evalToPickClassifier(stumps, D_t, data, sampleRatio, t):
+def evalToPickClassifier(stumps, D_t, data, sampleRatio, t, nStumps, loglevel):
     """
     This function currently samples the data. Could also sample the classifiers.
     """
@@ -115,7 +119,7 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, t):
     # treat these the same: no sampling or sample everything
         sampleClassifierRatio = 1
     # import pdb; pdb.set_trace()
-    index_classifiers = np.random.rand(1, len(stumps)) < sampleClassifierRatio
+    index_classifiers = np.random.rand(1, nStumps) < sampleClassifierRatio
     index_classifiers_list = np.ndarray.tolist(np.where(index_classifiers)[1])
 
     y = data[:,0]
@@ -132,11 +136,11 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, t):
         iDirection = np.sign(temp)
         errors = stumps[iStump][2]
 
-        weighted_error = sum(D_t * errors)
+        weighted_error = np.sum(D_t * errors)
         if weighted_error > 0.5:
             iDirection = -iDirection # invert the classifier
             errors = 1 - errors
-            weighted_error = sum(D_t * errors)
+            weighted_error = np.sum(D_t * errors)
 
         if weighted_error < bestInSample[1]:
             bestInSample = (iStump, weighted_error)
@@ -144,7 +148,8 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, t):
         # update this classifier
         weight = 1.0
         stumps[iStump] = (weighted_error, (iThreshold, iDirection*iFeature,weight), errors)
-        logging.info('{}, {}, {}, {}'.format(weighted_error, iThreshold, iDirection*iFeature, t))
+        if loglevel > 0:
+                logging.info('{}, {}, {}, {}'.format(weighted_error, iThreshold, iDirection*iFeature, t))
 
     return bestInSample[1], stumps[bestInSample[0]], stumps[bestInSample[0]][2]
 
@@ -156,8 +161,9 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
     # import pdb; pdb.set_trace()
     data = np.load(test_data_npy)
     y = data[:,0]
-    h_x = np.zeros((data.shape[0], len(learnedClassifiers)))
-    for iStump in range(len(learnedClassifiers)): # 0th column is the label
+    nLearnedClassifiers = len(learnedClassifiers)
+    h_x = np.zeros((data.shape[0], nLearnedClassifiers))
+    for iStump in range(nLearnedClassifiers):  # 0th column is the label
         iThreshold,temp,weight = learnedClassifiers[iStump]
         iDirection = np.sign(temp)
         iFeature = np.abs(temp)
@@ -175,10 +181,10 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
     error = np.sum((y != y_predict)+0.0)/y.shape[0]
     return error, y_predict, y, errors
 
-def writeStumps2CSV(stumps, fname):
+def writeStumps2CSV(stumps, fname, nStumps):
     # stumpsTable = np.zeros((len(stumps), 5))
-    stumpsTable = np.zeros((len(stumps), 4))
-    for iStump in range(len(stumps)):
+    stumpsTable = np.zeros((nStumps, 4))
+    for iStump in range(nStumps):
             stumpsTable[iStump,:] = np.hstack((
                     np.array(stumps[iStump][0]), # weighted_error
                     np.array(stumps[iStump][1])  # stumps (threshold, feature*direction, alpha)
@@ -201,11 +207,12 @@ def generateResults(g, h, data_npy, pp, gammaHistoryFile, logFilename):
     output = predict(g, data_npy + '_train0.npy')
     h.append((output[0], (-999, -999, -999)))
     # import pdb; pdb.set_trace()
-    ensembleFig = writeStumps2CSV(h, data_npy + '_ensemble')
+    ensembleFig = writeStumps2CSV(h, data_npy + '_ensemble', len(h))
     pp.savefig(ensembleFig)
 
-    error_history = np.zeros((len(g), 3))
-    for i in range(1,len(g)+1):
+    ng = len(g)
+    error_history = np.zeros((ng, 3))
+    for i in range(1,ng+1):
         error_train, y_predict, y, errors= predict(g[0:i], data_npy + '_train0.npy')
         error_test, y_predict, y, errors= predict(g[0:i], data_npy + '_test0.npy')
         error_history[i-1,:] = np.array([i, error_train, error_test])
@@ -254,25 +261,26 @@ if __name__ == '__main__':
         "\n" + "python2 adaboost.py cod-rna 0.3 1e4 1234" + \
         "\n" + "python2 adaboost.py cod-rna 0.3 1e4 1234 --log=INFO"
     print('-----------------------------------\n')
-    if len(sys.argv) < 6:
+    nargv = len(sys.argv)
+    if nargv < 6:
             loglevel = 0
     else:
             loglevel = getattr(logging, sys.argv[5][6:].upper())
             print('Logs enabled.')
 
-    if len(sys.argv) < 5:
+    if nargv < 5:
             seed = 0
     else:
             seed = int(sys.argv[4])
-    if len(sys.argv) < 4:
+    if nargv < 4:
             T = int(1e4)
     else:
             T = int(float(sys.argv[3]))
-    if len(sys.argv) < 3:
+    if nargv < 3:
             sampleClassifierRatio = 0.3
     else:
             sampleClassifierRatio = float(sys.argv[2])
-    if len(sys.argv) < 2:
+    if nargv < 2:
             data_npy = 'breast-cancer'
     else:
             data_npy = sys.argv[1]
