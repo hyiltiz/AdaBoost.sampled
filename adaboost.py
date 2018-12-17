@@ -1,9 +1,13 @@
 import numpy as np
-import matplotlib.pyplot as plt
-from matplotlib import rc
 import sys
+import os.path
 import datetime
 import logging
+
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib import rc
+
 
 #rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
 ## for Palatino and other serif fonts use:
@@ -13,7 +17,7 @@ rc('text', usetex=True)
 # use this to debug
 # import pdb; pdb.set_trace()
 
-def adaBoost(data_npy='breast-cancer_train0.npy', sampleRatio=(0,0), T=int(1e2), seed=0, loglevel=0):
+def adaBoost(data_npy='breast-cancer', sampleRatio=(0,0), T=int(1e2), seed=0, loglevel=0):
     """Takes an input data file storing numpy array and a function that generates
     base classifiers, evaluates all base classifiers when isSample is False,
     and runs classic AdaBoost.
@@ -22,17 +26,22 @@ def adaBoost(data_npy='breast-cancer_train0.npy', sampleRatio=(0,0), T=int(1e2),
     returns a prediction
 
     """
-    # import pdb; pdb.set_trace()
-    data = np.load(data_npy)
+#    import pdb; pdb.set_trace()
+    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+    pp = PdfPages(data_npy + '_results_plots_' + timestamp + '.pdf')
+    data = np.load(data_npy + '_train0.npy')
     m_samples = data.shape[0]
+    logFilename = '{}_classifiers_history_seed{}_sampleRatio{}_{}.log'.format(data_npy, seed, sampleRatio[1], timestamp)
     logging.basicConfig(format='%(message)s',
-                        filename='{}classifiers_history_seed{}_sampleRatio{}_{}.log'.format(data_npy, seed, sampleRatio[1], datetime.datetime.now().isoformat()),
+                        filename=logFilename,
+                        filemode='w',
                         level=loglevel)
     logging.info('weighted_error, threshold, feature_direction, iteration')
 
     stumps = createBoostingStumps(data)
     print('Number of base classifiers: {}'.format(len(stumps)))
-    writeStumps2CSV(stumps, data_npy + '_stumps')
+    stumpsFig = writeStumps2CSV(stumps, data_npy + '_stumps')
+    pp.savefig(stumpsFig)
 
     # AdaBoost algorithm
     D_t = np.zeros(m_samples)+1.0/m_samples
@@ -48,11 +57,16 @@ def adaBoost(data_npy='breast-cancer_train0.npy', sampleRatio=(0,0), T=int(1e2),
         Z_t = 2*np.sqrt(e_t*(1-e_t))
         D_t = D_t * np.exp(a[t]*(2*errors-1))/Z_t # errors := (-y * h_i_x+1)/2
 
+
+    # We got our ensemble here!
     g = [(hi[1][0], hi[1][1], a[i]) for i, hi in enumerate(h)]
-    output = predict(g, data_npy)
-    h.append((output[0], (-999, -999, -999)))
-    # import pdb; pdb.set_trace()
-    writeStumps2CSV(h, data_npy + '_ensemble')
+
+    # Save the results to a csv table and generate some plots
+    gammaHistoryFile='{}_ensemble_history_seed{}_sampleRatio{}_{}.csv'.format(data_npy, seed, sampleClassifierRatio, timestamp)
+    pp, error_history, logHistory = generateResults(g, h, data_npy, pp, gammaHistoryFile, logFilename)
+    pp.close()
+
+    # results saved, now return the ensemble
     return g
 
 def createBoostingStumps(data):
@@ -173,14 +187,55 @@ def writeStumps2CSV(stumps, fname):
 
     # 0.5-weighted_error=gamma when D_t is uniform, i.e. for base classifiers
     # this does not hold for g, i.e. post training classifiers
-    np.savetxt(fname + '.log.csv', stumpsTable, delimiter=',', newline='\n', comments='',
+    np.savetxt(fname + '.dump.csv', stumpsTable, delimiter=',', newline='\n', comments='',
                   # header='weighted_error, threshold, feature, weight_alpha, error')
                   header='weighted_error, threshold, feature, weight_alpha')
-    plt.figure()
+    fig = plt.figure()
     plt.hist(0.5 - stumpsTable[:,0])
     plt.title('Distribution of edge for ' + fname.split('_')[-1])  # last _element is the identifier
     plt.xlabel('Classifier edge $\gamma_i$')
     plt.ylabel('$Frequency$')
+    return fig
+
+def generateResults(g, h, data_npy, pp, gammaHistoryFile, logFilename):
+    output = predict(g, data_npy + '_train0.npy')
+    h.append((output[0], (-999, -999, -999)))
+    # import pdb; pdb.set_trace()
+    ensembleFig = writeStumps2CSV(h, data_npy + '_ensemble')
+    pp.savefig(ensembleFig)
+
+    error_history = np.zeros((len(g), 3))
+    for i in range(1,len(g)+1):
+        error_train, y_predict, y, errors= predict(g[0:i], data_npy + '_train0.npy')
+        error_test, y_predict, y, errors= predict(g[0:i], data_npy + '_test0.npy')
+        error_history[i-1,:] = np.array([i, error_train, error_test])
+        
+    print('The error for {} was: {}'.format(data_npy+'_test0.npy', error_test))
+    np.savetxt(gammaHistoryFile, error_history, delimiter=',', header='iteration, train-error, test-error', comments = '')
+    
+    # create a plot for error history over iterations
+    historyFig = plt.figure()
+    plt.plot(error_history[:,0], error_history[:,1],label='train')
+    plt.plot(error_history[:,0], error_history[:,2], label='test')
+    plt.legend()
+    plt.title('Ensemble error using ({:g}\% of stumps)'.format(sampleClassifierRatio*100))
+    plt.xlabel('Iteration $t$')
+    plt.ylabel('Error $\epsilon_t$')
+    pp.savefig(historyFig)
+
+    # if logs were enabled during iterations, then generate plots for it too
+    # plot erros history histribution of all evaluated classifiers during each iteration
+    logHistory = np.zeros(1)
+    if os.path.isfile(logFilename) and len(open(logFilename, 'rb').readlines()) >= 2:
+            logHistory = np.loadtxt(logFilename, delimiter = ',', skiprows = 1)
+            historyErrorsEvaluated = plt.figure()
+            plt.scatter(logHistory[:,3], logHistory[:,0], s=0.1)
+            plt.xlabel('Iterations $t$')
+            plt.ylabel('Evaluated classifier error $\epsilon_{t,i}$')
+            plt.title('Training history using ({:g}\% of stumps)'.format(sampleClassifierRatio*100))
+            pp.savefig(historyErrorsEvaluated)
+
+    return pp, error_history, logHistory
 
 
 if __name__ == '__main__':
@@ -193,7 +248,7 @@ if __name__ == '__main__':
         "\n" + "You can also only provide the <data> to keep the rest as default, or everything except the seed." + \
         "\n" + "Use --log=INFO to enable logging classifiers at each iteration to inspect gamma." + \
         "\n" + "Examples:" + \
-        "\n" + "python2 adaboost.py" + \
+ \
         "\n" + "python2 adaboost.py breast-cancer 0.25" + \
         "\n" + "python2 adaboost.py breast-cancer 0.25 1e4" + \
         "\n" + "python2 adaboost.py cod-rna 0.3 1e4 1234" + \
@@ -223,31 +278,6 @@ if __name__ == '__main__':
             data_npy = sys.argv[1]
 
     print('Training {} with {}% stumps for {} iterations ...'.format(data_npy, sampleClassifierRatio*100, T))
-    g = adaBoost(data_npy + '_train0.npy', (0, sampleClassifierRatio), T, seed, loglevel)
+    g = adaBoost(data_npy , (0, sampleClassifierRatio), T, seed, loglevel)
 
-    
-    error_history = np.zeros((len(g), 3))
-    for i in range(1,len(g)+1):
-        error_train, y_predict, y, errors= predict(g[0:i], data_npy + '_train0.npy')
-        error_test, y_predict, y, errors= predict(g[0:i], data_npy + '_test0.npy')
-        error_history[i-1,:] = np.array([i, error_train, error_test])
-        
-    print('The error for {} was: {}'.format(data_npy+'_test0.npy', error_test))
-    filename='{}_ensemble_history_seed{}_sampleRatio{}_{}.csv'.format(data_npy, seed, sampleClassifierRatio, datetime.datetime.now().isoformat())
-    np.savetxt(filename, error_history, delimiter=',', header='iteration, train-error, test-error', comments = '')
-    
-    # create a plot for error history over iterations
-    plt.figure()
-    plt.plot(error_history[:,0], error_history[:,1],label='train')
-    plt.plot(error_history[:,0], error_history[:,2], label='test')
-    plt.legend()
-    plt.title('Ensemble error using ({:g}\% of stumps)'.format(sampleClassifierRatio*100))
-    plt.xlabel('Iteration $t$')
-    plt.ylabel('Error $\epsilon_t$')
-    
-    ## If logs were enabled, plot erros history histribution of all evaluated classifiers during each iteration
-    #    x = np.loadtxt('breast-cancer_train0.npyclassifiers_history_seed0_sampleRatio1.0_2018-12-14T20:42:40.856094.log', delimiter = ',', skiprows = 1)
-    #    plt.scatter(error_history[:,3], error_history[:,0], s=0.1)
-    #    plt.xlabel('Iterations')
-    #    plt.ylabel('Errors'),plt.title('Training history for breast-cancer dataset')
     
