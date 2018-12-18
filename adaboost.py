@@ -8,7 +8,10 @@ import logging
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib import rc
+import matplotlib
 
+pgf_with_rc_fonts = {"pgf.texsystem": "pdflatex"}
+matplotlib.rcParams.update(pgf_with_rc_fonts)
 
 #rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
 ## for Palatino and other serif fonts use:
@@ -28,8 +31,9 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0,0), T=int(1e2), seed=0, lo
 
     """
 #    import pdb; pdb.set_trace()
+    sampleDataRatio, sampleClassifierRatio = sampleRatio
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    pp = PdfPages(data_npy + '_results_plots_' + timestamp + '.pdf')
+    #pp = PdfPages(data_npy + '_results_plots_' + timestamp + '.pdf')
     data = np.load(os.getcwd() + '/' + data_npy + '_train0.npy')
     m_samples = data.shape[0]
     logFilename = '{}_classifiers_history_seed{}_sampleRatio{}_{}.log'.format(data_npy, seed, sampleRatio[1], timestamp)
@@ -43,15 +47,17 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0,0), T=int(1e2), seed=0, lo
     stumps = createBoostingStumps(data, loglevel)
     nStumps = len(stumps)
     print('Number of base classifiers: {}'.format(nStumps))
-    stumpsFig = writeStumps2CSV(stumps, data_npy + '_stumps', nStumps)
-    pp.savefig(stumpsFig)
+    #stumpsFig = writeStumps2CSV(stumps, data_npy + '_stumps', nStumps)
+    #pp.savefig(stumpsFig)
 
     # AdaBoost algorithm
     D_t = np.zeros(m_samples)+1.0/m_samples
     h=[]
     a=np.zeros(T)
     np.random.seed(seed)
+
     for t in range(0,T):
+        #print 'Working on iteration number ' + str(t) + ' out of ' + str(T)
         e_t, h_t, errors = evalToPickClassifier(stumps, D_t, data, sampleRatio, t, nStumps, loglevel)
         h.append(h_t[0:2]) # keep the errors
         # import pdb; pdb.set_trace()
@@ -65,12 +71,15 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0,0), T=int(1e2), seed=0, lo
     g = [(hi[1][0], hi[1][1], a[i]) for i, hi in enumerate(h)]
 
     # Save the results to a csv table and generate some plots
-    gammaHistoryFile='{}_ensemble_history_seed{}_sampleRatio{}_{}.csv'.format(data_npy, seed, sampleClassifierRatio, timestamp)    
-    pp, error_history, logHistory = generateResults(g, h, data_npy, pp, gammaHistoryFile, logFilename)
-    pp.close()
+    #gammaHistoryFile='{}_ensemble_history_seed{}_sampleRatio{}_{}.csv'.format(data_npy, seed, sampleClassifierRatio, timestamp)
+
+    #pp, error_history, logHistory, error_test = generateResults(g, h, data_npy, pp, gammaHistoryFile, logFilename)
+    #pp.close()
 
     # results saved, now return the ensemble
-    return g
+    error_test, y_predict, y, errors= predict(g, data_npy + '_test0.npy')
+
+    return g, error_test
 
 def createBoostingStumps(data, loglevel):
     """
@@ -125,7 +134,6 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, t, nStumps, loglevel):
 
     y = data[:,0]
     # D_t = 1.0/data.shape[0]
-
     # evaluate a subset of classifiers
     # keeping track of the smallest error
     bestInSample = (-1,1)
@@ -243,7 +251,7 @@ def generateResults(g, h, data_npy, pp, gammaHistoryFile, logFilename):
             plt.title('Training history using ({:g}\% of stumps)'.format(sampleClassifierRatio*100))
             pp.savefig(historyErrorsEvaluated)
 
-    return pp, error_history, logHistory
+    return pp, error_history, logHistory, error_test
 
 
 if __name__ == '__main__':
@@ -256,7 +264,6 @@ if __name__ == '__main__':
         "\n" + "You can also only provide the <data> to keep the rest as default, or everything except the seed." + \
         "\n" + "Use --log=INFO to enable logging classifiers at each iteration to inspect gamma." + \
         "\n" + "Examples:" + \
- \
         "\n" + "python2 adaboost.py breast-cancer 0.25" + \
         "\n" + "python2 adaboost.py breast-cancer 0.25 1e4" + \
         "\n" + "python2 adaboost.py cod-rna 0.3 1e4 1234" + \
