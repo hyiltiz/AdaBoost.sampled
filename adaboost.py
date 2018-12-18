@@ -8,6 +8,7 @@ import logging
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib import rc
+from tqdm import tqdm
 
 
 #rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
@@ -51,7 +52,7 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0,0), T=int(1e2), seed=0, lo
     h=[]
     a=np.zeros(T)
     np.random.seed(seed)
-    for t in range(0,T):
+    for t in tqdm(range(0,T)):
         e_t, h_t, errors = evalToPickClassifier(stumps, D_t, data, sampleRatio, t, nStumps, loglevel)
         h.append(h_t[0:2]) # keep the errors
         # import pdb; pdb.set_trace()
@@ -63,7 +64,8 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0,0), T=int(1e2), seed=0, lo
 
     # We got our ensemble here!
     g = [(hi[1][0], hi[1][1], a[i]) for i, hi in enumerate(h)]
-
+    import pdb; pdb.set_trace()
+    
     # Save the results to a csv table and generate some plots
     gammaHistoryFile='{}_ensemble_history_seed{}_sampleRatio{}_{}.csv'.format(data_npy, seed, sampleClassifierRatio, timestamp)    
     pp, error_history, logHistory = generateResults(g, h, data_npy, pp, gammaHistoryFile, logFilename)
@@ -154,6 +156,7 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, t, nStumps, loglevel):
 
     return bestInSample[1], stumps[bestInSample[0]], stumps[bestInSample[0]][2]
 
+
 def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
     """
     Use the learned stumps (thresholds for features and their directions) to
@@ -213,7 +216,7 @@ def generateResults(g, h, data_npy, pp, gammaHistoryFile, logFilename):
 
     ng = len(g)
     error_history = np.zeros((ng, 3))
-    for i in range(1,ng+1):
+    for i in tqdm(range(1,ng+1)):
         error_train, y_predict, y, errors= predict(g[0:i], data_npy + '_train0.npy')
         error_test, y_predict, y, errors= predict(g[0:i], data_npy + '_test0.npy')
         error_history[i-1,:] = np.array([i, error_train, error_test])
