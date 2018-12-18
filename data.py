@@ -64,6 +64,27 @@ def split(file, seed=0, p_train=0.8):
     np.save((file[:-4]+ "_test" + str(seed) + ".npy"), data_test)
     return data_train, data_test
 
+def split_addNoise(file, seed = 0, p_train = 0.8, p_noise = 0.05):
+    np.random.seed(seed)
+    datarray, data_train, data_test = read(file), [], []
+    for i in range(len(datarray)):
+        select = np.random.binomial(1, p_train)
+        if select == 0:
+            data_test.append(datarray[i])
+        else:
+            reverse = np.random.binomial(1,p_noise)
+            if reverse == 0:
+                if datarray[i][0] == 1:
+                    datarray[i][0] = -1
+                else:
+                    datarray[i][0] = 1
+            data_train.append(datarray[i])
+
+    #print data_train
+    np.save((file[:-4]+ "n_train" + str(seed) + ".npy"), data_train)
+    np.save((file[:-4]+ "n_test" + str(seed) + ".npy"), data_test)
+    return data_train, data_test
+
 def __checkdata(file):
     """
     Takes a file with data in the 'libsvm' format and returns a list where each element is a line of the data
@@ -91,8 +112,10 @@ if __name__ == '__main__':
     elif sys.argv[2] == 'w':
         # Probably don't need to do this
         write(sys.argv[1])
+    elif sys.argv[2] == 'splitn':
+        split_addNoise(sys.argv[1])
     else:
         print "Use command 'python <file-name> <r,split,w>'" + \
               "\n" + "'r'to read the data from the file and return an array" +\
               "\n" + "'split' to split the data into a training and test data" +\
-              "\n" + "'w' to write to a data file"
+              "\n" + "'splitn' to split the data and add noise"
