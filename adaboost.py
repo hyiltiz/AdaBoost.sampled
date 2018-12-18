@@ -46,7 +46,7 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0,0), T=int(1e2), seed=0, lo
 
     stumps = createBoostingStumps(data, loglevel)
     nStumps = len(stumps)
-    print('Number of base classifiers: {}'.format(nStumps))
+    #print('Number of base classifiers: {}'.format(nStumps))
     #stumpsFig = writeStumps2CSV(stumps, data_npy + '_stumps', nStumps)
     #pp.savefig(stumpsFig)
 
