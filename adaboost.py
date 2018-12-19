@@ -64,10 +64,10 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0,0), T=int(1e2), seed=0, lo
 
     # We got our ensemble here!
     g = [(hi[1][0], hi[1][1], a[i]) for i, hi in enumerate(h)]
-    import pdb; pdb.set_trace()
-    
+#    import pdb; pdb.set_trace()
+
     # Save the results to a csv table and generate some plots
-    gammaHistoryFile='{}_ensemble_history_seed{}_sampleRatio{}_{}.csv'.format(data_npy, seed, sampleClassifierRatio, timestamp)    
+    gammaHistoryFile='{}_ensemble_history_seed{}_sampleRatio{}_{}.csv'.format(data_npy, seed, sampleClassifierRatio, timestamp)
     pp, error_history, logHistory = generateResults(g, h, data_npy, pp, gammaHistoryFile, logFilename)
     pp.close()
 
@@ -210,7 +210,6 @@ def writeStumps2CSV(stumps, fname, nStumps):
 def generateResults(g, h, data_npy, pp, gammaHistoryFile, logFilename):
     output = predict(g, data_npy + '_train0.npy')
     h.append((output[0], (-999, -999, -999)))
-    # import pdb; pdb.set_trace()
     ensembleFig = writeStumps2CSV(h, data_npy + '_ensemble', len(h))
     pp.savefig(ensembleFig)
 
@@ -220,10 +219,10 @@ def generateResults(g, h, data_npy, pp, gammaHistoryFile, logFilename):
         error_train, y_predict, y, errors= predict(g[0:i], data_npy + '_train0.npy')
         error_test, y_predict, y, errors= predict(g[0:i], data_npy + '_test0.npy')
         error_history[i-1,:] = np.array([i, error_train, error_test])
-        
+
     print('The error for {} was: {}'.format(data_npy+'_test0.npy', error_test))
     np.savetxt(gammaHistoryFile, error_history, delimiter=',', header='iteration, train-error, test-error', comments = '')
-    
+
     # create a plot for error history over iterations
     historyFig = plt.figure()
     plt.plot(error_history[:,0], error_history[:,1],label='train')
@@ -236,6 +235,7 @@ def generateResults(g, h, data_npy, pp, gammaHistoryFile, logFilename):
 
     # if logs were enabled during iterations, then generate plots for it too
     # plot erros history histribution of all evaluated classifiers during each iteration
+#    import pdb; pdb.set_trace()
     logHistory = np.zeros(1)
     if os.path.isfile(logFilename) and len(open(logFilename, 'rb').readlines()) >= 2:
             logHistory = np.loadtxt(logFilename, delimiter = ',', skiprows = 1)
@@ -247,6 +247,53 @@ def generateResults(g, h, data_npy, pp, gammaHistoryFile, logFilename):
             pp.savefig(historyErrorsEvaluated)
 
     return pp, error_history, logHistory
+
+
+def libsvmLineParser(line):
+    D = dict()
+    columns = line.strip().split(' ')
+    try:
+        D = dict((int(k), float(v)) for k, v in (e.split(':') for e in columns[1:]))
+        D[0] = float(columns[0])
+    except ValueError:
+        print('Could not parse the following line:')
+        print(line)
+    return D
+
+
+
+def libsvmReadTxt(file):
+    fh = open(file)
+    lines = fh.read().split('\n')
+    listD = []
+    for line in lines:
+        if line is not '':
+            listD.append(libsvmLineParser(line))
+    fh.close()
+
+    nFeatures = max([max(i) for i in listD]) + 1  # feature indexes from 0
+    mSamples = len(listD)
+    data = np.zeros((mSamples, nFeatures)) + np.nan
+    for i,iSample, in enumerate(listD):
+        for k,v in iSample.iteritems():
+            data[i, k] = v
+
+    # remove fully missing values
+    missingCases = np.isnan(data).all(1)
+    missingFeatures = np.isnan(data).all(0)
+    if missingCases.nonzero()[0].size > 0:
+        print('Removing completely {} missing cases.'.format(missingCases.nonzero()[0].size))
+        data = data[~missingCases,:]
+    if missingFeatures.nonzero()[0].size:
+        print('Removing completely missing cases.')
+        data = data[:,~missingFeatures]
+
+    if np.isnan(data).any():
+        print('There are still {} missing data points.'.format(np.isnan(data).nonzero()[0].size))
+    return data
+
+
+
 
 
 if __name__ == '__main__':
@@ -292,4 +339,4 @@ if __name__ == '__main__':
     print('Training {} with {}% stumps for {} iterations ...'.format(data_npy, sampleClassifierRatio*100, T))
     g = adaBoost(data_npy , (0, sampleClassifierRatio), T, seed, loglevel)
 
-    
+
