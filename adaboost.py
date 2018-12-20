@@ -29,8 +29,13 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0, 0), T=int(1e2),
     mNT).
 
     @ Parameters:
-    data_npy: a string to a file strong a numpy array, or a numpy
-    array of shape (m,N).
+    data_npy: It could be one of the following:
+       1. a string for files <data_npy>_train0.py and <data_npy>_test0.py.
+       2. a string as the name of a libsvm formatted text file.
+       3. a 3-tuple containing two numpy arrays of shape (m, N) and a string
+          for the name of the data set as an identifier (trainArray, testArray,
+          idStr). This format is particularly useful for cross-validation or
+          other tests where data are transformed before analysis dynamically.
 
     sampleRatio: a tuple (a,b) where positive ratios a, b represents the
     percentage of samples and base classifiers to be used to compute errors
@@ -63,8 +68,8 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0, 0), T=int(1e2),
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     pp = PdfPages(data_npy + '_results_plots_' + timestamp + '.pdf')
-    # or use data directly
-    data = np.load(os.getcwd() + '/' + data_npy + '_train0.npy')
+
+    data_npy, data, data_test = readData(data_npy)
     m_samples = data.shape[0]
 
     logFilename = '{}_classifiers_history_seed{}_sampleRatio{}_{}.log'.format(
@@ -114,8 +119,9 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0, 0), T=int(1e2),
                 '_{}.csv'.format(data_npy, seed, sampleClassifierRatio,
                                  timestamp)}
 
-    pp, error_history, logHistory = generateResults(g, h, data_npy, pp,
-                                                    **auxVars2)
+    pp, error_history, logHistory = generateResults(
+        g, h, (data_npy, data, data_test), pp,
+        **auxVars2)
     pp.close()
 
     # results saved, now return the ensemble
@@ -249,8 +255,10 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
     @ Returns: classification error, predicted labels and errors
     """
 
-    # TODO: use np array when given
-    data = np.load(test_data_npy)
+    if type(test_data_npy) is str:
+        data = np.load(test_data_npy)
+    elif type(test_data_npy) is np.ndarray:
+        data = test_data_npy
 
     y = data[:, 0]
     nLearnedClassifiers = len(learnedClassifiers)
@@ -307,7 +315,7 @@ def writeStumps2CSV(stumps, fname):
     return fig
 
 
-def generateResults(g, h, data_npy, pp, gammaHistoryFile, logFilename):
+def generateResults(g, h, dataTuple, pp, gammaHistoryFile, logFilename):
     """Create result plots and tables using the ensemble g (includes alpha) and h
     (includes errors).
     Created tables:
@@ -320,7 +328,8 @@ def generateResults(g, h, data_npy, pp, gammaHistoryFile, logFilename):
          expensive to plot and render.
 
     """
-    output = predict(g, data_npy + '_train0.npy')
+    data_npy, data, data_test = dataTuple
+    output = predict(g, data)
     h.append((output[0], (-999, -999, -999)))
     ensembleFig = writeStumps2CSV(h, data_npy + '_ensemble')
     pp.savefig(ensembleFig)
@@ -329,11 +338,8 @@ def generateResults(g, h, data_npy, pp, gammaHistoryFile, logFilename):
     error_history = np.zeros((ng, 3))
     # TODO: with linear algebra, this loop can only be evaluated once!
     for i in tqdm(range(1, ng+1)):
-        # TODO: use input data rather than read
-        error_train, y_predict, y, errors = predict(
-            g[0:i], data_npy + '_train0.npy')
-        error_test,  y_predict, y, errors = predict(
-            g[0:i], data_npy + '_test0.npy')
+        error_train, y_predict, y, errors = predict(g[0:i], data)
+        error_test,  y_predict, y, errors = predict(g[0:i], data_test)
         error_history[i-1, :] = np.array([i, error_train, error_test])
 
     print('The test error for {} was: {}'.format(
@@ -427,19 +433,48 @@ sparse missing values were kept intact.
     # remove fully missing values
     missingCases = np.isnan(data).all(1)
     missingFeatures = np.isnan(data).all(0)
+    import pdb; pdb.set_trace()  # noqa
     if missingCases.nonzero()[0].size > 0:
         print('Removing completely {} missing cases.'.format(
             missingCases.nonzero()[0].size))
         data = data[~missingCases, :]
     if missingFeatures.nonzero()[0].size:
         print('Removing completely {} missing features.'.format(
-            missingFeatures.nonzero()[1].size))
+            missingFeatures.nonzero()[0].size))
         data = data[:, ~missingFeatures]
     if np.isnan(data).any():
         print('There are still {} missing data points.'.format(
             np.isnan(data).nonzero()[0].size))
 
     return data
+
+
+def readData(data_npy):
+    """Reads data_npy into a string indicating the data set, numpy arrays of
+training and test data sets.
+    """
+
+    if type(data_npy) is tuple:
+        # do nothing
+        data, data_test, data_npy = data_npy
+
+    elif type(data_npy) is str:  # noqa
+        try:
+            data = np.load(data_npy + '_train0.npy')
+            data_test = np.load(data_npy + '_test0.npy')
+            # data = np.load(os.getcwd() + '/' + data_npy + '_train0.npy')
+        except IOError:
+            print('Failed to load {}.'
+                  'Assuming it is a libsvm .txt file and '
+                  'converting to a numpy array.'.format(data_npy))
+            data_full = libsvmReadTxt(data_npy)
+            # split into test and training set by 20%
+            idxTrain = np.random.rand(data_full.shape[0]) < 0.8
+            data = data_full[idxTrain, :]
+            data_test = data_full[~idxTrain, :]
+            data_npy = data_npy + '-converted'
+
+    return data_npy, data, data_test
 
 
 if __name__ == '__main__':
@@ -484,6 +519,9 @@ python2 adaboost.py cod-rna 0.3 1e4 1234 --log=INFO
     else:
             data_npy = sys.argv[1]
 
-    print('Training {} with {}% stumps for {} iterations ...'.format(
-        data_npy, sampleClassifierRatio*100, T))
-    g = adaBoost(data_npy, (0, sampleClassifierRatio), T, seed, loglevel)
+    if sys.argv[0] == 'adaboost.py':
+        print('Training {} with {}% stumps for {} iterations ...'.format(
+            data_npy, sampleClassifierRatio*100, T))
+        g = adaBoost(data_npy, (0, sampleClassifierRatio), T, seed, loglevel)
+    elif sys.argv[0] == 'convert':
+        print('Converted {} to {} from libsvm format into numpy array.'.format())
