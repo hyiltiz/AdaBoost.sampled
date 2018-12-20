@@ -387,10 +387,24 @@ def generateResults(g, h, dataTuple, pp, gammaHistoryFile, logFilename):
     empiricalError = Z.prod(0)
     empiricalErrorBound63 = np.exp(-2*np.sum(np.power(edges, 2), 0))
     edges[edges==0] = 0.5  # rewrite 0 into 0.5 so argmin works
-    empiricalErrorBound64 = Z.prod(0)
+    empiricalErrorBound64 = np.exp(-2*np.power(edges.min(0), 2)*range(1,T+1))
+    sigma = ((np.random.rand(int(1e5), m) < 0.5)+0)*2-1  # Rademacher variable
+    empiricalRademacher = np.max(np.matmul(sigma, h_i_x_train)/m, 1).mean()
+    rho = 0.01
+    deltaConfidence = 0.05
+    Y_predict = (((y_predict_train_history>0)+0)*2-1)
+    marginLosses, onMargin = np.vectorize(fMargin)((Y*Y_predict)/np.tril(alpha).T.sum(0), rho)
+    marginLoss = marginLosses.mean(0)
+    generalizationBound616 = marginLoss + 2/rho*empiricalRademacher + \
+        3*np.sqrt(np.log(2.0/deltaConfidence)/(2*m))  # Mohri (2012) pp. 133
+    # NOTE: this bound is larger than 1 for breast-canter 3% classifiers with
+    # a margin of 0.01 with 95% confidence
 
-    print('The test error for {} was: {}'.format(
-        data_npy+'_test0.npy', error_test))
+
+
+    print('The test error for {} using base classifiers '
+          'with a (empirical) Rademacher complexity of {} was: {}'.format(
+        data_npy+'_test0.npy', empiricalRademacher, error_test))
     np.savetxt(gammaHistoryFile, error_history,
                delimiter=',', comments='',
                header='iteration, train-error, test-error')
@@ -422,6 +436,16 @@ def generateResults(g, h, dataTuple, pp, gammaHistoryFile, logFilename):
         pp.savefig(historyErrorsEvaluated)
 
     return pp, error_history, logHistory
+
+
+def fMargin(x, rho):
+    """Margin loss function with a margin rho"""
+    if x <= 0:
+        return 0, 0
+    elif x >= rho:
+        return 1, 0
+    else:
+        return 1.0 - x/rho, 1
 
 
 def libsvmLineParser(line):
