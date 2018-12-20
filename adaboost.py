@@ -4,7 +4,7 @@ import os.path
 import os
 import datetime
 import logging
-import multiprocessing
+import multiprocessing # noqa: TODO
 
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
@@ -12,19 +12,21 @@ from matplotlib import rc
 from tqdm import tqdm
 
 
-# rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
-## for Palatino and other serif fonts use:
-rc('font', **{'family': 'serif', 'serif': ['Palatino']})
+rc('font', **{'family': 'serif',
+              'serif': ['Palatino'],
+              'sans-serif': ['Helvetica']})
 rc('text', usetex=True)
 
 # use this to debug
 # import pdb; pdb.set_trace()  # noqa
 
 
-def adaBoost(data_npy='breast-cancer', sampleRatio=(0,0), T=int(1e2), seed=0, loglevel=0):
+def adaBoost(data_npy='breast-cancer', sampleRatio=(0, 0), T=int(1e2),
+             seed=0, loglevel=0):
     """Perform sampled classifier AdaBoost (AdaBoost.SC) with boosting stumps
     (threshold functions) as base classifiers. With m samples, N features and T
-    iterations of boosting, the total computational complexity is O(mNlogm + mNT).
+    iterations of boosting, the total computational complexity is O(mNlogm +
+    mNT).
 
     @ Parameters:
     data_npy: a string to a file strong a numpy array, or a numpy
@@ -110,8 +112,7 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0,0), T=int(1e2), seed=0, lo
     auxVars2 = {'logFilename': logFilename,
                 'gammaHistoryFile': '{}_ensemble_history_seed{}_sampleRatio{}'
                 '_{}.csv'.format(data_npy, seed, sampleClassifierRatio,
-                                   timestamp)}
-
+                                 timestamp)}
 
     pp, error_history, logHistory = generateResults(g, h, data_npy, pp,
                                                     **auxVars2)
@@ -120,6 +121,7 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0,0), T=int(1e2), seed=0, lo
     # results saved, now return the ensemble
     # and training errors of each classifier in the ensemble
     return g, h[0]
+
 
 def createBoostingStumps(data, loglevel):
     """
@@ -185,7 +187,7 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, t, nStumps, loglevel):
     # treat these the same: no sampling or sample everything
     if sampleDataRatio == 0:
         sampleDataRatio == 1
-    index_data = np.random.rand(1, data.shape[1]-1) < sampleDataRatio
+    index_data = np.random.rand(1, data.shape[1]-1) < sampleDataRatio  # noqa
 
     # treat these the same: no sampling or sample everything
     if sampleClassifierRatio == 0:
@@ -310,8 +312,8 @@ def generateResults(g, h, data_npy, pp, gammaHistoryFile, logFilename):
     Created tables:
     Created plots:
       1. Histogram of edges of classifiers in the ensemble
-      2. Test and training error of the ensemble as a function of iterations t for
-         <data_npy>_train0.npy and <data_npy>_test0.npy.
+      2. Test and training error of the ensemble as a function of iterations t
+         for <data_npy>_train0.npy and <data_npy>_test0.npy.
       3. Distribution of errors for all evaluated base classifiers at each
          round. This needs the logs to be enabled, and is computationally
          expensive to plot and render.
