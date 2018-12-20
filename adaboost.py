@@ -509,7 +509,7 @@ training and test data sets.
         try:
             data = np.load(data_npy + '_train0.npy')
             data_test = np.load(data_npy + '_test0.npy')
-            # data = np.load(os.getcwd() + '/' + data_npy + '_train0.npy')
+            data = np.load(os.getcwd() + '/' + data_npy + '_train0.npy')
         except IOError:
             print('Failed to load {}.'
                   'Assuming it is a libsvm .txt file and '
