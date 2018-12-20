@@ -64,6 +64,12 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0, 0), T=int(1e2),
     the base classifiers and the classifiers in the ensemble, and training and
     test errors as a function of round t.
 
+    # TODO: A re-implementation to generalize base classifiers [(ID, alpha)] is
+            the base classifiers, linked to an evaluation function (ID,x) -> y.
+            We construct a base classifier bank [(ID, alpha), h_i_t,
+            errors_train] upon creation. Then base classifiers are only
+            evaluated once.
+
     """
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
@@ -101,14 +107,14 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0, 0), T=int(1e2),
     np.random.seed(seed)
     for t in tqdm(range(0, T)):
         auxVars['t'] = t
-        e_t, h_t, errors = evalToPickClassifier(stumps, D_t, data, sampleRatio,
+        e_t, h_t = evalToPickClassifier(stumps, D_t, data, sampleRatio,
                                                 **auxVars)
-        h.append(h_t[0:2])  # keep the errors
+        h.append(h_t)  # keep the errors
         alpha[t] = 1.0/2 * np.log(1/e_t-1)
         # not keeping track of D_t, Z_t history to optimize for memory
         Z_t = 2*np.sqrt(e_t*(1-e_t))
         # Note that we have: errors === (-y * h_i_x+1)/2
-        D_t = D_t * np.exp(alpha[t]*(2*errors-1))/Z_t
+        D_t = D_t * np.exp(alpha[t]*(2*h_t[2]-1))/Z_t
 
     # Construct the ensemble out of the picked classifiers, with alphas
     g = [(hi[1][0], hi[1][1], alpha[i]) for i, hi in enumerate(h)]
@@ -147,14 +153,16 @@ def createBoostingStumps(data, loglevel):
         thresholds = np.unique(data[:, iFeature])
         for iThreshold in thresholds:
             iDirection = +1
-
-            h_i_x = ((data[:, iFeature] >= iThreshold)+0)*2-1
+            h_i_x = ((data[:, iFeature] >= iThreshold)+0)*2-1  # {-1, 1} labels
+            errors = (-y * h_i_x+1)/2  # {0, 1}, 1 records misclassified data
+            # Invert the classifier and its errors
             errors = (-y * h_i_x+1)/2
 
             # invert the classifier if its error exceeds random guessing
             weighted_error = np.sum(D_t * errors)
             if weighted_error > 0.5:
                 iDirection = -iDirection
+                h_i_x = -h_i_x
                 errors = 1-errors
                 weighted_error = np.sum(D_t * errors)
 
@@ -165,7 +173,8 @@ def createBoostingStumps(data, loglevel):
             baseClassifiers.append((
               weighted_error,  # used to pick classifiers and analyze algorithm
               (iThreshold, iDirection*iFeature, alpha),  # the classifier tuple
-              errors))        # classifier errors, stored to prevent evaluation
+              errors,         # classifier errors, stored to prevent evaluation
+              h_i_x))         # classifier evaluation, also stored
 
             if loglevel > 0:
                 logging.info('{}, {}, {}, {}'.format(
@@ -182,8 +191,7 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, t, nStumps, loglevel):
     efficiency, so this function merely samples base classifiers and re-weights
     the errors to pick the best base classifiers w.r.t. the new weight D_t.
 
-    This function currently only samples the classifiers.
-    TODO: Also sample the data.
+    NOTE: This function currently only samples the classifiers.
 
     """
 
@@ -213,15 +221,17 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, t, nStumps, loglevel):
     # NOTE: these loops can run in parallel
     for i, iStump in enumerate(index_classifiers_list):
         # load a classifier
-        iThreshold, temp, alpha = stumps[iStump][1]  # alpha is not used here
+        iThreshold, temp, _ = stumps[iStump][1]
         iFeature = np.abs(temp)
         iDirection = np.sign(temp)
         errors = stumps[iStump][2]
+        h_i_x = stumps[iStump][3]
 
         # invert the classifier if its error exceeds random guessing
         weighted_error = np.sum(D_t * errors)
         if weighted_error > 0.5:
             iDirection = -iDirection
+            h_i_x = -h_i_x
             errors = 1 - errors
             weighted_error = np.sum(D_t * errors)
 
@@ -230,7 +240,8 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, t, nStumps, loglevel):
         stumps[iStump] = (
             weighted_error,  # used to pick classifiers and analyze algorithm
             (iThreshold, iDirection*iFeature, alpha),  # the classifier tuple
-            errors)         # classifier errors, stored to prevent evaluation
+            errors,         # classifier errors, stored to prevent evaluation
+            h_i_x)  # store this rather than a pointer to the stumps
 
         if loglevel > 0:
                 logging.info('{}, {}, {}, {}'.format(
@@ -241,7 +252,7 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, t, nStumps, loglevel):
     minError = sampleErrors.min()
     idxBestInSample = index_classifiers_list[sampleErrors.argmin()]
     bestInSample = stumps[idxBestInSample]
-    return minError, bestInSample, bestInSample[2]
+    return minError, bestInSample
 
 
 def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
@@ -261,14 +272,16 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
         data = test_data_npy
 
     y = data[:, 0]
+    D_t = 1.0/y.size
     nLearnedClassifiers = len(learnedClassifiers)
     h_x = np.zeros((data.shape[0], nLearnedClassifiers))
+    evaluatedClassifiers = []
     for iStump in range(nLearnedClassifiers):  # 0th column is the label
         iThreshold, temp, alpha = learnedClassifiers[iStump]
         iDirection = np.sign(temp)  # Extract the direction and the feature
         iFeature = np.abs(temp)
 
-        h_i_x = (data[:, iFeature] >= iThreshold+0)*2-1  # {-1, 1} labels
+        h_i_x = ((data[:, iFeature] >= iThreshold)+0)*2-1  # {-1, 1} labels
         errors = (-y * h_i_x+1)/2  # {0, 1}, 1 records misclassified data
         # Invert the classifier and its errors if the classifier was inverted
         if iDirection < 0:
@@ -276,12 +289,18 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
             h_i_x = -1 * h_i_x
         h_x[:, iStump] = alpha * h_i_x            # weighted
 
+        evaluatedClassifiers.append((
+            np.sum(errors)/D_t,  # not used
+            (iThreshold, iDirection*iFeature, alpha),  # the classifier tuple
+            errors,         # classifier errors, stored to prevent evaluation
+            h_i_x))  # store this rather than a pointer to the stumps
+
     y_predict = np.sign(np.sum(h_x, 1))           # majority
 
     errors = ((y != y_predict)+0.0)*2-1
     error = np.sum((y != y_predict)+0.0)/y.shape[0]
 
-    return error, y_predict, y, errors
+    return error, y_predict, y, evaluatedClassifiers
 
 
 def writeStumps2CSV(stumps, fname):
@@ -332,15 +351,43 @@ def generateResults(g, h, dataTuple, pp, gammaHistoryFile, logFilename):
     output = predict(g, data)
     h.append((output[0], (-999, -999, -999)))
     ensembleFig = writeStumps2CSV(h, data_npy + '_ensemble')
+    h.pop()  # already recorded the ensemble error in CSV
     pp.savefig(ensembleFig)
 
-    ng = len(g)
-    error_history = np.zeros((ng, 3))
-    # TODO: with linear algebra, this loop can only be evaluated once!
-    for i in tqdm(range(1, ng+1)):
-        error_train, y_predict, y, errors = predict(g[0:i], data)
-        error_test,  y_predict, y, errors = predict(g[0:i], data_test)
-        error_history[i-1, :] = np.array([i, error_train, error_test])
+    # Compute error history as the ensemble grows
+    # Instead of actually growing the ensemble, we use matrix tricks
+    _, _, y_test, h_test = predict(g, data_test)
+    T = len(g)
+    m = len(h[0][2])
+    m_test = len(h_test[0][2])
+    h_i_x_train = np.zeros((m, T))
+    h_i_x_test = np.zeros((m_test, T))
+    weighted_error_train = np.zeros(T)
+    alpha = np.zeros(T)
+    for hi in range(0, T):
+        h_i_x_train[:, hi] = h[hi][3]
+        weighted_error_train[hi] = h[hi][0]  # to bound empirical (test) error
+        h_i_x_test[:, hi] = h_test[hi][3]
+        alpha[hi] = g[hi][2]
+
+    Y = np.tile(data[:, 0], (T, 1)).T
+    y_predict_train_history = np.matmul(h_i_x_train, np.tril(alpha).T)
+    errors_train_history = ((((y_predict_train_history > 0)+0)*2-1) != Y)+0
+    error_train_history = (errors_train_history.sum(0)+0.0)/Y.shape[0]
+
+    Y_test = np.tile(y_test, (T, 1)).T
+    y_predict_test_history = np.matmul(h_i_x_test, np.tril(alpha).T)
+    errors_test_history = ((((y_predict_test_history > 0)+0)*2-1) != Y_test)+0
+    error_test_history = (errors_test_history.sum(0)+0.0)/Y_test.shape[0]
+
+    e = np.tril(weighted_error_train).T  # See Mohri (2012) pp. 125
+    Z = 2*np.sqrt(e*(1-e))
+    edges = np.tril(0.5-weighted_error_train).T
+    Z[Z==0] = 1
+    empiricalError = Z.prod(0)
+    empiricalErrorBound63 = np.exp(-2*np.sum(np.power(edges, 2), 0))
+    edges[edges==0] = 0.5  # rewrite 0 into 0.5 so argmin works
+    empiricalErrorBound64 = Z.prod(0)
 
     print('The test error for {} was: {}'.format(
         data_npy+'_test0.npy', error_test))
