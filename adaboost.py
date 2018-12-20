@@ -75,7 +75,7 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0, 0), T=int(1e2),
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     pp = PdfPages(data_npy + '_results_plots_' + timestamp + '.pdf')
 
-    data_npy, data, data_test = readData(data_npy)
+    data_npy, data, data_test = getData(data_npy)
     m_samples = data.shape[0]
 
     logFilename = '{}_classifiers_history_seed{}_sampleRatio{}_{}.log'.format(
@@ -132,7 +132,7 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0, 0), T=int(1e2),
 
     # results saved, now return the ensemble
     # and training errors of each classifier in the ensemble
-    return g, h[0]
+    return g, h, error_history
 
 
 def createBoostingStumps(data, loglevel):
@@ -400,14 +400,23 @@ def generateResults(g, h, dataTuple, pp, gammaHistoryFile, logFilename):
     # NOTE: this bound is larger than 1 for breast-canter 3% classifiers with
     # a margin of 0.01 with 95% confidence
 
+    error_history = np.vstack((
+        range(T),
+        error_train_history,
+        error_test_history,
+        empiricalErrorBound63,
+        empiricalErrorBound64,
+        generalizationBound616))
 
-
-    print('The test error for {} using base classifiers '
-          'with a (empirical) Rademacher complexity of {} was: {}'.format(
-        data_npy+'_test0.npy', empiricalRademacher, error_test))
+    print('The test error for {} using base classifiers with a (empirical) '
+          'Rademacher complexity of {} was: {}'.format(
+              data_npy+'_test0.npy', empiricalRademacher,
+              error_test_history[-1]))
     np.savetxt(gammaHistoryFile, error_history,
                delimiter=',', comments='',
-               header='iteration, train-error, test-error')
+               header='iteration, train-error, test-error, '
+               'empirical-error-bound63, empirical-error-bound64, '
+               'generalization-bound616')
 
     # Create a plot for error history over iterations.
     historyFig = plt.figure()
@@ -520,9 +529,46 @@ sparse missing values were kept intact.
     return data
 
 
-def readData(data_npy):
+def analyzeCVError(data_txt, k=10, sampleClassifierRatio, T, seed):
+    """k-fold cross validation error of the ensemble over time."""
+    import pdb; pdb.set_trace()  # noqa
+    loglevel = 0
+    data_npy, data_list, data_test_list = getData(data_txt, k)
+    error_history_cv = np.array([])
+    for data, data_test in zip(data_list, data_test_list):
+        _, _, error_history = adaBoost(
+            (data_npy, data, data_test),
+            (0, sampleClassifierRatio), T, seed, loglevel)
+
+        error_history_cv = np.dstack((
+            error_history_cv,
+            error_history)) if error_history_cv else error_history
+
+    CVError = (error_history_cv.mean(2), error_history_cv.std(2)/sqrt(k))
+
+    # Create a plot for error history over iterations.
+    error_history, error_history_sem = CVError
+    legends = ['train-error', 'test-error',
+               'empirical-error-bound63', 'empirical-error-bound64',
+               'generalization-bound616']
+    historyFig = plt.figure()
+    for i in error_history.shape[1]:
+        plt.errorbar(range(T), error_history[:, 1], label=legends[i])
+
+    plt.legend()
+    plt.title('Ensemble 10-fold-CV error using ({:g}\% of stumps)'.format(
+        sampleClassifierRatio*100))
+    plt.xlabel('Iteration $t$')
+    plt.ylabel('Error $\epsilon_t$')
+    pp.savefig(historyFig)
+
+
+def getData(data_npy, k=0.8):
     """Reads data_npy into a string indicating the data set, numpy arrays of
-training and test data sets.
+training and test data sets. If k>1 and the input is a libsvm .txt file, split
+into k training and test sets for cross-validation. If 0<k<1, then the data is
+split randomly where k percent is used for training and 1-k for testing.
+
     """
 
     if type(data_npy) is tuple:
@@ -539,16 +585,29 @@ training and test data sets.
                   'Assuming it is a libsvm .txt file and '
                   'converting to a numpy array.'.format(data_npy))
             data_full = libsvmReadTxt(data_npy)
-            # split into test and training set by 20%
-            idxTrain = np.random.rand(data_full.shape[0]) < 0.8
-            data = data_full[idxTrain, :]
-            data_test = data_full[~idxTrain, :]
-            data_npy = data_npy + '-converted'
+            if k < 1:
+                # split into test and training set by 20%
+                idxTrain = np.random.rand(data_full.shape[0]) < k
+                data = data_full[idxTrain, :]
+                data_test = data_full[~idxTrain, :]
+                data_npy = data_npy + '-converted'
+            elif k >= 1:
+                CVsplits = np.repeat(range(k), data_full.shape[0]/k)
+                data_list = []
+                data_test_list = []
+                for iSplit in range(k):
+                    data_test_list.append(data_full[CVsplits == iSplit, :])
+                    data_list.append(data_full[CVsplits != iSplit, :])
+
+                # return lists of data
+                return data_npy, data_list, data_test_list
+
 
     return data_npy, data, data_test
 
 
 if __name__ == '__main__':
+    # TODO: use shopts
     helpCLI = """ Use command `python2 adaboost.py <data> 0.3 1e4 0 [--log=INFO]` to run
 adaBoost with threshold functions as base classifiers on the dataset in
 <data>_train0.npy then test <data>_test0.npy. At each iteration of the 1e4
@@ -590,7 +649,6 @@ python2 adaboost.py cod-rna 0.3 1e4 1234 --log=INFO
     else:
             data_npy = sys.argv[1]
 
-
     if sys.argv[1] == 'convert':
         data_full = libsvmReadTxt(sys.argv[2])
         idxTrain = np.random.rand(data_full.shape[0]) < 0.8
@@ -599,6 +657,10 @@ python2 adaboost.py cod-rna 0.3 1e4 1234 --log=INFO
         data_npy = data_npy + '-converted'
         np.savetxt(data_npy + '-converted_train0.csv', data)
         np.savetxt(data_npy + '-converted_test0.csv', data_test)
+    if sys.argv[1] == 'cv':
+        print('Performing cross validation.')
+        k = int(sys.argv[7])
+        CVError = analyzeCVError(data_txt, k, sampleClassifierRatio, T, seed)
     else:     # call adaBoost()
         print('Training {} with {}% stumps for {} iterations ...'.format(
             data_npy, sampleClassifierRatio*100, T))
