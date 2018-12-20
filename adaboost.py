@@ -184,7 +184,7 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, t, nStumps, loglevel):
     sampleDataRatio, sampleClassifierRatio = sampleRatio
 
     # TODO: sampling data is not implemented yet
-    # treat these the same: no sampling or sample everything
+    # Treat these the same: no sampling or sample everything
     if sampleDataRatio == 0:
         sampleDataRatio == 1
     index_data = np.random.rand(1, data.shape[1]-1) < sampleDataRatio  # noqa
@@ -201,11 +201,11 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, t, nStumps, loglevel):
     # efficiency sacrificing some RAM. y = data[:, 0] D_t = 1.0/data.shape[0]
 
     # Evaluate a subset of classifiers keeping track of the smallest error
-    # TODO: keep a list of best in samples, not a tuple so we could check what
+    # We keep a list of best in samples, not a tuple so we could check what
     # was the second best, or our worst performance later
-    bestInSample = (-1, 1)
+    sampleErrors = np.zeros(index_classifiers.sum())
     # NOTE: these loops can run in parallel
-    for iStump in index_classifiers_list:            # 0th column is the label
+    for i, iStump in enumerate(index_classifiers_list):
         # load a classifier
         iThreshold, temp, alpha = stumps[iStump][1]  # alpha is not used here
         iFeature = np.abs(temp)
@@ -219,9 +219,6 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, t, nStumps, loglevel):
             errors = 1 - errors
             weighted_error = np.sum(D_t * errors)
 
-        if weighted_error < bestInSample[1]:
-            bestInSample = (iStump, weighted_error)
-
         # update this classifier
         alpha = 1.0
         stumps[iStump] = (
@@ -233,8 +230,12 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, t, nStumps, loglevel):
                 logging.info('{}, {}, {}, {}'.format(
                     weighted_error, iThreshold, iDirection*iFeature, t))
 
-    # TODO: add var names
-    return bestInSample[1], stumps[bestInSample[0]], stumps[bestInSample[0]][2]
+        sampleErrors[i] = weighted_error
+
+    minError = sampleErrors.min()
+    idxBestInSample = index_classifiers_list[sampleErrors.argmin()]
+    bestInSample = stumps[idxBestInSample]
+    return minError, bestInSample, bestInSample[2]
 
 
 def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
