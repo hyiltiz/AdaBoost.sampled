@@ -12,9 +12,9 @@ from matplotlib import rc
 from tqdm import tqdm
 
 
-rc('font', **{'family': 'serif',
-              'serif': ['Palatino'],
-              'sans-serif': ['Helvetica']})
+#rc('font', **{'family': 'serif',
+#              'serif': ['Palatino'],
+#              'sans-serif': ['Helvetica']})
 rc('text', usetex=True)
 
 # use this to debug
