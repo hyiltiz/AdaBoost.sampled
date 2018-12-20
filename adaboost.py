@@ -1,15 +1,42 @@
-import numpy as np
+"""AdaBoost binary classifier using sampled boosting stumps. You can feed in
+libsvm formatted text files for binary classification. Creating training and
+test data sets, generating result plots and tables and algorithm analysis are
+all performed automatically. You can also do the above with cross validation.
+This module is designed so that it can be imported to work with your own
+program. Functional programming principles are followed whenever possible.
+
+Usage:
+  adaboost.py run [-i <dataset>] [-r <sampleClassifierRatio>] [-T <T>] [--seed <seed>] [--log <loglevel>]
+  adaboost.py convert [-i <dataset>] [-s <s>]
+  adaboost.py cv [-i <dataset>] [-k <k>] [-r <sampleClassifierRatio>] [-T <T>] [--seed <seed>] 
+  adaboost.py (-h | --help)
+  adaboost.py (--version)
+
+Options:
+  -h --help                          Show this screen.
+  --version                          Show version.
+  -i <dataset>                       Data set to perform adaBoost. [default: breast-cancer.txt]
+  -r <sampleClassifierRatio>         Percentage of classifiers used. [default: 1.0]
+  --seed <seed>                      Seed to initialize adaboost() function. Controls sampler. [default: 0]
+  --loglevel <loglevel>              Use INFO to record classifiers evaluated each round. [default: NOTSET]
+  -k <k>                             k-fold cross validation. [default: 10]
+  -s <s>                             Split s percent of data into training set. [default: 0.8]
+
+"""
+
+from docopt import docopt
 import sys
 import os.path
 import os
 import datetime
 import logging
 import multiprocessing # noqa: TODO
+from tqdm import tqdm
 
+import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib import rc
-from tqdm import tqdm
 
 
 #rc('font', **{'family': 'serif',
@@ -121,8 +148,9 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0, 0), T=int(1e2),
 
     # Save the results to a csv table and generate some plots
     auxVars2 = {'logFilename': logFilename,
+                'sampleClassifierRatio': sampleRatio[1], 
                 'gammaHistoryFile': '{}_ensemble_history_seed{}_sampleRatio{}'
-                '_{}.csv'.format(data_npy, seed, sampleClassifierRatio,
+                '_{}.csv'.format(data_npy, seed, sampleRatio[1],
                                  timestamp)}
 
     pp, error_history, logHistory = generateResults(
@@ -334,7 +362,8 @@ def writeStumps2CSV(stumps, fname):
     return fig
 
 
-def generateResults(g, h, dataTuple, pp, gammaHistoryFile, logFilename):
+def generateResults(g, h, dataTuple, pp,
+                    gammaHistoryFile, logFilename, sampleClassifierRatio):
     """Create result plots and tables using the ensemble g (includes alpha) and h
     (includes errors).
     Created tables:
@@ -529,7 +558,7 @@ sparse missing values were kept intact.
     return data
 
 
-def analyzeCVError(data_txt, k=10, sampleClassifierRatio, T, seed):
+def analyzeCVError(data_txt, k=10, sampleClassifierRatio=1.0, T=1e4, seed=0):
     """k-fold cross validation error of the ensemble over time."""
     import pdb; pdb.set_trace()  # noqa
     loglevel = 0
@@ -607,61 +636,25 @@ split randomly where k percent is used for training and 1-k for testing.
 
 
 if __name__ == '__main__':
-    # TODO: use shopts
-    helpCLI = """ Use command `python2 adaboost.py <data> 0.3 1e4 0 [--log=INFO]` to run
-adaBoost with threshold functions as base classifiers on the dataset in
-<data>_train0.npy then test <data>_test0.npy. At each iteration of the 1e4
-total iterations, only 30% of the classifiers are evaluated randomly selected
-with seed 0. You can also only provide the <data> to keep the rest as default,
-or everything except the seed. Use --log=INFO to enable logging classifiers at
-each iteration to inspect gamma.
+    import pdb; pdb.set_trace()  # noqa
+    args = docopt(__doc__, version='Naval Fate 2.0')
 
-Examples:
-python2 adaboost.py breast-cancer 0.25
-python2 adaboost.py breast-cancer 0.25 1e4
-python2 adaboost.py cod-rna 0.3 1e4 1234
-python2 adaboost.py cod-rna 0.3 1e4 1234 --log=INFO
-"""
-    print(helpCLI)
-    print('-----------------------------------\n')
-
-    nargv = len(sys.argv)
-    if nargv < 6:
-            loglevel = 0
-    else:
-            loglevel = getattr(logging, sys.argv[5][6:].upper())
-            print('Logs enabled.')
-
-    if nargv < 5:
-            seed = 0
-    else:
-            seed = int(sys.argv[4])
-    if nargv < 4:
-            T = int(1e4)
-    else:
-            T = int(float(sys.argv[3]))
-    if nargv < 3:
-            sampleClassifierRatio = 0.3
-    else:
-            sampleClassifierRatio = float(sys.argv[2])
-    if nargv < 2:
-            data_npy = 'breast-cancer'
-    else:
-            data_npy = sys.argv[1]
-
-    if sys.argv[1] == 'convert':
-        data_full = libsvmReadTxt(sys.argv[2])
-        idxTrain = np.random.rand(data_full.shape[0]) < 0.8
+    if args['convert']:
+        data_npy = args['-i']
+        data_full = libsvmReadTxt(data_npy)
+        idxTrain = np.random.rand(data_full.shape[0]) < float(args['-s'])
         data = data_full[idxTrain, :]
         data_test = data_full[~idxTrain, :]
         data_npy = data_npy + '-converted'
         np.savetxt(data_npy + '-converted_train0.csv', data)
         np.savetxt(data_npy + '-converted_test0.csv', data_test)
-    if sys.argv[1] == 'cv':
+    elif args['cv']:
         print('Performing cross validation.')
-        k = int(sys.argv[7])
-        CVError = analyzeCVError(data_txt, k, sampleClassifierRatio, T, seed)
-    else:     # call adaBoost()
+        CVError = analyzeCVError(
+            args['-i'], int(args['-k']),
+            float(args['-r']), int(float((args['<T>']))), int(args['--seed']))
+    elif args['run']:
         print('Training {} with {}% stumps for {} iterations ...'.format(
-            data_npy, sampleClassifierRatio*100, T))
-        g = adaBoost(data_npy, (0, sampleClassifierRatio), T, seed, loglevel)
+            args['-i'], float(args['-r'])*100, int(float((args['<T>'])))))
+        g = adaBoost(args['-i'], (0, float(args['-r'])), int(float((args['<T>']))),
+                     int(args['--seed']), args['<loglevel>'])
