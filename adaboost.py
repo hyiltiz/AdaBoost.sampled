@@ -566,9 +566,16 @@ python2 adaboost.py cod-rna 0.3 1e4 1234 --log=INFO
     else:
             data_npy = sys.argv[1]
 
-    if sys.argv[0] == 'adaboost.py':
+
+    if sys.argv[1] == 'convert':
+        data_full = libsvmReadTxt(sys.argv[2])
+        idxTrain = np.random.rand(data_full.shape[0]) < 0.8
+        data = data_full[idxTrain, :]
+        data_test = data_full[~idxTrain, :]
+        data_npy = data_npy + '-converted'
+        np.savetxt(data_npy + '-converted_train0.csv', data)
+        np.savetxt(data_npy + '-converted_test0.csv', data_test)
+    else:     # call adaBoost()
         print('Training {} with {}% stumps for {} iterations ...'.format(
             data_npy, sampleClassifierRatio*100, T))
         g = adaBoost(data_npy, (0, sampleClassifierRatio), T, seed, loglevel)
-    elif sys.argv[0] == 'convert':
-        print('Converted {} to {} from libsvm format into numpy array.'.format())
