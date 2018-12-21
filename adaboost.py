@@ -8,7 +8,7 @@ program. Functional programming principles are followed whenever possible.
 Usage:
   adaboost.py run [-i <dataset>] [-r <sampleClassifierRatio>] [-T <T>] [--seed <seed>] [--log <loglevel>]
   adaboost.py convert [-i <dataset>] [-s <s>]
-  adaboost.py cv [-i <dataset>] [-k <k>] [-r <sampleClassifierRatio>] [-T <T>] [--seed <seed>] 
+  adaboost.py cv [-i <dataset>] [-k <k>] [-r <sampleClassifierRatio>] [-T <T>] [--seed <seed>]
   adaboost.py (-h | --help)
   adaboost.py (--version)
 
@@ -141,7 +141,7 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0, 0), T=int(1e2),
     h = []
     alpha = np.zeros(T)
     np.random.seed(seed)
-    for t in tqdm(range(0, T)):
+    for t in range(0, T):
         auxVars['t'] = t
         e_t, h_t = evalToPickClassifier(stumps, D_t, data, sampleRatio,
                                                 **auxVars)
@@ -157,7 +157,7 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0, 0), T=int(1e2),
 
     # Save the results to a csv table and generate some plots
     auxVars2 = {'logFilename': logFilename,
-                'sampleClassifierRatio': sampleRatio[1], 
+                'sampleClassifierRatio': sampleRatio[1],
                 'gammaHistoryFile': '{}_ensemble_history_seed{}_sampleRatio{}'
                 '_{}.csv'.format(data_npy, seed, sampleRatio[1],
                                  timestamp)}
@@ -282,8 +282,8 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, t, nStumps, loglevel):
 
     sampleStumps = list(compress(stumps, index_classifiers[0]))
 
-    p = mp.Pool()
-    updatedStumps = p.map(partial(
+    # p = mp.Pool()
+    updatedStumps = map(partial(
         wrap_evalToPickClassifier, data=data, D_t=D_t, loglevel=loglevel),
                           sampleStumps)
 
@@ -320,8 +320,8 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
     elif type(test_data_npy) is np.ndarray:
         data = test_data_npy
 
-    p = mp.Pool()
-    evaluatedClassifiers = p.map(partial(wrap_predict, data=data),
+    # p = mp.Pool()
+    evaluatedClassifiers = map(partial(wrap_predict, data=data),
                                  learnedClassifiers)
 
     h_x = np.zeros((data.shape[0], len(learnedClassifiers)))
