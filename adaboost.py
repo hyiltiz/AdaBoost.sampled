@@ -31,8 +31,10 @@ import os.path
 import os
 import datetime
 import logging
-import multiprocessing # noqa: TODO
+import multiprocessing as mp
 from tqdm import tqdm
+from functools import partial
+from itertools import compress
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -45,8 +47,12 @@ from matplotlib import rc
 #              'sans-serif': ['Helvetica']})
 rc('text', usetex=True)
 
+# Enables multi-core processing for OpenBLAS library used by numpy etc
+os.environ["OPENBLAS_MAIN_FREE"] = "1"
+
 # use this to debug
 # import pdb; pdb.set_trace()  # noqa
+
 
 
 def adaBoost(data_npy='breast-cancer', sampleRatio=(0, 0), T=int(1e2),
@@ -166,6 +172,52 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0, 0), T=int(1e2),
     return g, h, error_history
 
 
+def applyStump2Data(stump, data, evals,
+                    D_t, iThreshold, iFeature, alpha, loglevel):
+    """Helper function. Takes a stump and data to compute errors."""
+    # locals().update(kwargs)  # HACK: load kwargs into function namespace
+    if iThreshold is None:
+        # Just unpack stump
+        iThreshold, temp, alpha = stump[1]
+        iDirection = np.sign(temp)
+        iFeature = np.abs(temp)
+        h_i_x = stump[3]
+        errors = stump[2]
+
+    if evals is True:
+        # need iFeature, iThreshold
+        y = data[:, 0]
+        iDirection = +1
+        # Here D_t is uniform to create the stumps
+        D_t = 1.0/y.size
+        # NOTE: This is the only place any stump is actually evaluated
+        h_i_x = ((data[:, iFeature] >= iThreshold)+0)*2-1  # {-1, 1} labels
+        errors = (-y * h_i_x+1)/2  # {0, 1}, 1 records misclassified data
+
+    # Invert the classifier if its error exceeds random guessing
+    # Here D_t could change between rounds
+    weighted_error = np.sum(D_t * errors)
+    if weighted_error > 0.5:
+        iDirection = -iDirection
+        h_i_x = -h_i_x
+        errors = 1-errors
+    weighted_error = np.sum(D_t * errors)
+
+    # record this classifier
+    # alpha, to be used by predict() after adaBoost() finishes training
+    # $\epsilon_t$: weighted_error weights classification errors by D_t
+    newStump = (
+        weighted_error,  # used to pick classifiers and analyze algorithm
+        (iThreshold, iDirection*iFeature, alpha),  # the classifier tuple
+        errors,          # classifier errors, stored to prevent evaluation
+        h_i_x)           # classifier evaluation, also stored
+
+    if loglevel > 0:
+        logging.info('{}, {}, {}, {}'.format(
+            weighted_error, iThreshold, iDirection*iFeature, 0))
+    return newStump
+
+
 def createBoostingStumps(data, loglevel):
     """
     Create boosting stumps, i.e. axis aligned thresholds for each features.
@@ -227,22 +279,29 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, t, nStumps, loglevel):
     # was the second best, or our worst performance later
     sampleErrors = np.zeros(index_classifiers.sum())
     # NOTE: these loops can run in parallel
-    for _, iStump in enumerate(index_classifiers_list):
-        # load a classifier
-        stumps[iStump] = applyStump2Data(  # only change some stumps
-            stumps[iStump], data, evals=False,
-            **{'D_t': D_t,
-               'iThreshold': None,
-                'iFeature': None,
-                'alpha': None,
-                'loglevel': loglevel})
 
-    sampleErrors = np.array([stumps[i][0] for i in index_classifiers_list])
+    sampleStumps = list(compress(stumps, index_classifiers[0]))
+
+    p = mp.Pool()
+    updatedStumps = p.map(partial(
+        wrap_evalToPickClassifier, data=data, D_t=D_t, loglevel=loglevel),
+                          sampleStumps)
+
+    sampleErrors = np.array([stump[0] for stump in updatedStumps])
 
     minError = sampleErrors.min()
     idxBestInSample = index_classifiers_list[sampleErrors.argmin()]
-    bestInSample = stumps[idxBestInSample]
+    bestInSample = updatedStumps[idxBestInSample]
     return minError, bestInSample
+
+def wrap_evalToPickClassifier(x, data, D_t, loglevel):
+    return applyStump2Data(  # only change some stumps
+        x, data, evals=False,
+        **{'D_t': D_t,
+           'iThreshold': None,
+           'iFeature': None,
+           'alpha': None,
+           'loglevel': loglevel})
 
 
 def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
@@ -261,15 +320,9 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
     elif type(test_data_npy) is np.ndarray:
         data = test_data_npy
 
-    evaluatedClassifiers = []
-    for stump in learnedClassifiers:  # 0th column is the label
-        evaluatedClassifiers.append(applyStump2Data(
-            (None, stump, None, None), data, evals=True,
-            **{'iThreshold': None,
-               'D_t': None,
-               'iFeature': None,
-               'alpha': None,
-               'loglevel': 0}))
+    p = mp.Pool()
+    evaluatedClassifiers = p.map(partial(wrap_predict, data=data),
+                                 learnedClassifiers)
 
     h_x = np.zeros((data.shape[0], len(learnedClassifiers)))
     for iStump, stump in enumerate(evaluatedClassifiers):
@@ -283,50 +336,13 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
 
     return error, y_predict, y, evaluatedClassifiers
 
-
-def applyStump2Data(stump, data, evals,
-                    D_t, iThreshold, iFeature, alpha, loglevel):
-    # locals().update(kwargs)  # HACK: load kwargs into function namespace
-    if iThreshold is None:
-        # Just unpack stump
-        iThreshold, temp, alpha = stump[1]
-        iDirection = np.sign(temp)
-        iFeature = np.abs(temp)
-        h_i_x = stump[3]
-        errors = stump[2]
-
-    if evals is True:
-        # need iFeature, iThreshold
-        y = data[:, 0]
-        iDirection = +1
-        # Here D_t is uniform to create the stumps
-        D_t = 1.0/y.size
-        # NOTE: This is the only place any stump is actually evaluated
-        h_i_x = ((data[:, iFeature] >= iThreshold)+0)*2-1  # {-1, 1} labels
-        errors = (-y * h_i_x+1)/2  # {0, 1}, 1 records misclassified data
-
-    # Invert the classifier if its error exceeds random guessing
-    # Here D_t could change between rounds
-    weighted_error = np.sum(D_t * errors)
-    if weighted_error > 0.5:
-        iDirection = -iDirection
-        h_i_x = -h_i_x
-        errors = 1-errors
-    weighted_error = np.sum(D_t * errors)
-
-    # record this classifier
-    # alpha, to be used by predict() after adaBoost() finishes training
-    # $\epsilon_t$: weighted_error weights classification errors by D_t
-    newStump = (
-        weighted_error,  # used to pick classifiers and analyze algorithm
-        (iThreshold, iDirection*iFeature, alpha),  # the classifier tuple
-        errors,          # classifier errors, stored to prevent evaluation
-        h_i_x)           # classifier evaluation, also stored
-
-    if loglevel > 0:
-        logging.info('{}, {}, {}, {}'.format(
-            weighted_error, iThreshold, iDirection*iFeature, 0))
-    return newStump
+def wrap_predict(x, data): return applyStump2Data(
+        (None, x, None, None), data, evals=True,
+        **{'iThreshold': None,
+           'D_t': None,
+           'iFeature': None,
+           'alpha': None,
+           'loglevel': 0})
 
 
 def writeStumps2CSV(stumps, fname):
