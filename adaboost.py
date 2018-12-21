@@ -98,12 +98,13 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0, 0), T=int(1e2),
             evaluated once.
 
     """
+    sampleDataRatio, sampleClassifierRatio = sampleRatio
+
+
+    data_npy, data, data_test = getData(data_npy)
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     pp = PdfPages(data_npy + '_results_plots_' + timestamp + '.pdf')
-
-    data_npy, data, data_test = getData(data_npy)
-    m_samples = data.shape[0]
 
     logFilename = '{}_classifiers_history_seed{}_sampleRatio{}_{}.log'.format(
         data_npy, seed, sampleRatio[1], timestamp)
@@ -114,6 +115,7 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0, 0), T=int(1e2),
                             level=loglevel)
         logging.info('weighted_error, threshold, feature_direction, iteration')
 
+    m_samples = data.shape[0]
     stumps = createBoostingStumps(data, loglevel)
     nStumps = len(stumps)
     print('Number of base classifiers: {}'.format(nStumps))
@@ -435,7 +437,7 @@ def generateResults(g, h, dataTuple, pp,
         error_test_history,
         empiricalErrorBound63,
         empiricalErrorBound64,
-        generalizationBound616))
+        generalizationBound616)).T
 
     print('The test error for {} using base classifiers with a (empirical) '
           'Rademacher complexity of {} was: {}'.format(
@@ -542,7 +544,6 @@ sparse missing values were kept intact.
     # remove fully missing values
     missingCases = np.isnan(data).all(1)
     missingFeatures = np.isnan(data).all(0)
-    import pdb; pdb.set_trace()  # noqa
     if missingCases.nonzero()[0].size > 0:
         print('Removing completely {} missing cases.'.format(
             missingCases.nonzero()[0].size))
@@ -554,13 +555,27 @@ sparse missing values were kept intact.
     if np.isnan(data).any():
         print('There are still {} missing data points.'.format(
             np.isnan(data).nonzero()[0].size))
+        # TODO: only remove cases or features s.t. least data points are
+        # removed as well
+        # HACK: remove all missing cases for now
+        data = data[~np.isnan(data).any(1), :]
 
+    # normalize the data into [-1,1]
+    scale = lambda x: (x-np.min(x,0))/(np.max(x,0)-np.min(x,0))*2-1
+
+    # Do not scale class labels
+    #   datarray = np.column_stack([data[:,0], scale(data[:,1:])])
+
+    # scale class labels as well
+    # breast-cancer has labels of 2, 4
+
+    data = scale(data)
     return data
 
 
 def analyzeCVError(data_txt, k=10, sampleClassifierRatio=1.0, T=1e4, seed=0):
     """k-fold cross validation error of the ensemble over time."""
-    import pdb; pdb.set_trace()  # noqa
+    timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
     loglevel = 0
     data_npy, data_list, data_test_list = getData(data_txt, k)
     error_history_cv = np.array([])
@@ -571,25 +586,30 @@ def analyzeCVError(data_txt, k=10, sampleClassifierRatio=1.0, T=1e4, seed=0):
 
         error_history_cv = np.dstack((
             error_history_cv,
-            error_history)) if error_history_cv else error_history
+            error_history)) if error_history_cv.size else error_history
 
-    CVError = (error_history_cv.mean(2), error_history_cv.std(2)/sqrt(k))
+    CVError = (error_history_cv.mean(2), error_history_cv.std(2)/np.sqrt(k))
 
     # Create a plot for error history over iterations.
     error_history, error_history_sem = CVError
-    legends = ['train-error', 'test-error',
+    legends = ['iteration', 'train-error', 'test-error',
                'empirical-error-bound63', 'empirical-error-bound64',
                'generalization-bound616']
     historyFig = plt.figure()
-    for i in error_history.shape[1]:
-        plt.errorbar(range(T), error_history[:, 1], label=legends[i])
+    for i in range(1, 4):
+        plt.errorbar(range(T), error_history[:, i], label=legends[i])
 
     plt.legend()
     plt.title('Ensemble 10-fold-CV error using ({:g}\% of stumps)'.format(
         sampleClassifierRatio*100))
     plt.xlabel('Iteration $t$')
     plt.ylabel('Error $\epsilon_t$')
-    pp.savefig(historyFig)
+    plt.savefig('{}_{}CV_seed{}_sampleRatio{}_{}.eps'.format(
+        data_npy, k, seed, sampleClassifierRatio, timestamp),
+                dpi = 1200, format = 'eps')
+    plt.ylim((0,1))
+
+    return CVError
 
 
 def getData(data_npy, k=0.8):
@@ -602,7 +622,7 @@ split randomly where k percent is used for training and 1-k for testing.
 
     if type(data_npy) is tuple:
         # do nothing
-        data, data_test, data_npy = data_npy
+        data_npy, data, data_test = data_npy
 
     elif type(data_npy) is str:  # noqa
         try:
@@ -610,7 +630,7 @@ split randomly where k percent is used for training and 1-k for testing.
             data_test = np.load(data_npy + '_test0.npy')
             data = np.load(os.getcwd() + '/' + data_npy + '_train0.npy')
         except IOError:
-            print('Failed to load {}.'
+            print('Failed to load {} as .npy file. '
                   'Assuming it is a libsvm .txt file and '
                   'converting to a numpy array.'.format(data_npy))
             data_full = libsvmReadTxt(data_npy)
@@ -622,21 +642,22 @@ split randomly where k percent is used for training and 1-k for testing.
                 data_npy = data_npy + '-converted'
             elif k >= 1:
                 CVsplits = np.repeat(range(k), data_full.shape[0]/k)
+                # remove remainders after folding into chunks
+                data_full = data_full[0:len(CVsplits), :]
                 data_list = []
                 data_test_list = []
                 for iSplit in range(k):
                     data_test_list.append(data_full[CVsplits == iSplit, :])
                     data_list.append(data_full[CVsplits != iSplit, :])
 
+                data_npy = data_npy + '-cv'
                 # return lists of data
                 return data_npy, data_list, data_test_list
-
 
     return data_npy, data, data_test
 
 
 if __name__ == '__main__':
-    import pdb; pdb.set_trace()  # noqa
     args = docopt(__doc__, version='Naval Fate 2.0')
 
     if args['convert']:
