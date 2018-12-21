@@ -6,7 +6,7 @@ This module is designed so that it can be imported to work with your own
 program. Functional programming principles are followed whenever possible.
 
 Usage:
-  adaboost.py run [-i <dataset>] [-r <sampleClassifierRatio>] [-T <T>] [--seed <seed>] [--log <loglevel>]
+  adaboost.py run [-i <dataset>] [-r <sampleClassifierRatio>] [-T <T>] [--seed <seed>] [--log <loglevel>] [--parallel]
   adaboost.py convert [-i <dataset>] [-s <s>]
   adaboost.py cv [-i <dataset>] [-k <k>] [-r <sampleClassifierRatio>] [-T <T>] [--seed <seed>]
   adaboost.py (-h | --help)
@@ -22,6 +22,7 @@ Options:
   -k <k>                             k-fold cross validation. [default: 10]
   -s <s>                             Split s percent of data into training set. [default: 0.8]
   -T <T>                             Number of rounds to boost. [default: 1e3]
+  --parallel                         Create multiprocessing pool of workers to parallel jobs within each round. [default: None]
 
 """
 
@@ -35,6 +36,7 @@ import multiprocessing as mp
 from tqdm import tqdm
 from functools import partial
 from itertools import compress
+from time import time
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -282,10 +284,18 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, t, nStumps, loglevel):
 
     sampleStumps = list(compress(stumps, index_classifiers[0]))
 
-    # p = mp.Pool()
+    t1 = time()
     updatedStumps = map(partial(
         wrap_evalToPickClassifier, data=data, D_t=D_t, loglevel=loglevel),
                           sampleStumps)
+    t1 = time() - t1
+
+    t0 = time()
+    updatedStumps = p.map(partial(
+        wrap_evalToPickClassifier, data=data, D_t=D_t, loglevel=loglevel),
+                          sampleStumps)
+    t0 = time() - t0
+    print('Eval time: map {}, p.mat {}'. format(t1, t0))
 
     sampleErrors = np.array([stump[0] for stump in updatedStumps])
 
@@ -671,6 +681,11 @@ split randomly where k percent is used for training and 1-k for testing.
 
 if __name__ == '__main__':
     args = docopt(__doc__, version='Naval Fate 2.0')
+    if args['--parallel']:
+        p = mp.Pool()
+        myMap = p.map
+    else:
+        myMap = map
 
     if args['convert']:
         data_npy = args['-i']
