@@ -181,7 +181,7 @@ def createBoostingStumps(data, loglevel):
         thresholds = np.unique(data[:, iFeature])
         for iThreshold in thresholds:
             baseClassifiers.append(applyStump2Data(
-                stump, data, evals=True,
+                [], data, evals=True,
                 **{'iThreshold': iThreshold,
                    'iFeature': iFeature,
                    'D_t': None,
@@ -237,7 +237,7 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, t, nStumps, loglevel):
                 'alpha': None,
                 'loglevel': loglevel})
 
-    sampleErrors = [iStump[0] for iStump in stumps[index_classifiers_list]]
+    sampleErrors = np.array([stumps[i][0] for i in index_classifiers_list])
 
     minError = sampleErrors.min()
     idxBestInSample = index_classifiers_list[sampleErrors.argmin()]
@@ -264,7 +264,7 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
     evaluatedClassifiers = []
     for stump in learnedClassifiers:  # 0th column is the label
         evaluatedClassifiers.append(applyStump2Data(
-            stump, data, evals=True,
+            (None, stump, None, None), data, evals=True,
             **{'iThreshold': None,
                'D_t': None,
                'iFeature': None,
@@ -272,9 +272,10 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
                'loglevel': 0}))
 
     h_x = np.zeros((data.shape[0], len(learnedClassifiers)))
-    for stump in evaluatedClassifiers:
+    for iStump, stump in enumerate(evaluatedClassifiers):
         h_x[:, iStump] = stump[1][2] * stump[3]   # weighted: alpha*h_i_x
 
+    y = data[:, 0]
     y_predict = np.sign(np.sum(h_x, 1))           # majority
 
     errors = ((y != y_predict)+0.0)*2-1
@@ -283,7 +284,9 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
     return error, y_predict, y, evaluatedClassifiers
 
 
-def applyStump2Data(stump, data, evals, **kwargs):
+def applyStump2Data(stump, data, evals,
+                    D_t, iThreshold, iFeature, alpha, loglevel):
+    # locals().update(kwargs)  # HACK: load kwargs into function namespace
     if iThreshold is None:
         # Just unpack stump
         iThreshold, temp, alpha = stump[1]
@@ -294,7 +297,7 @@ def applyStump2Data(stump, data, evals, **kwargs):
 
     if evals is True:
         # need iFeature, iThreshold
-        y = data[0, :]
+        y = data[:, 0]
         iDirection = +1
         # Here D_t is uniform to create the stumps
         D_t = 1.0/y.size
@@ -668,7 +671,6 @@ if __name__ == '__main__':
             args['-i'], int(args['-k']),
             float(args['-r']), int(float((args['-T']))), int(args['--seed']))
     elif args['run']:
-        import pdb; pdb.set_trace()  # noqa
         print('Training {} with {}% stumps for {} iterations ...'.format(
             args['-i'], float(args['-r'])*100, int(float(args['-T']))))
         g = adaBoost(args['-i'], (0, float(args['-r'])), int(float((args['-T']))),
