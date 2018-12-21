@@ -21,6 +21,7 @@ Options:
   --loglevel <loglevel>              Use INFO to record classifiers evaluated each round. [default: NOTSET]
   -k <k>                             k-fold cross validation. [default: 10]
   -s <s>                             Split s percent of data into training set. [default: 0.8]
+  -T <T>                             Number of rounds to boost. [default: 1e3]
 
 """
 
@@ -301,7 +302,6 @@ def applyStump2Data(stump, data, evals, **kwargs):
         h_i_x = ((data[:, iFeature] >= iThreshold)+0)*2-1  # {-1, 1} labels
         errors = (-y * h_i_x+1)/2  # {0, 1}, 1 records misclassified data
 
-
     # Invert the classifier if its error exceeds random guessing
     # Here D_t could change between rounds
     weighted_error = np.sum(D_t * errors)
@@ -321,8 +321,8 @@ def applyStump2Data(stump, data, evals, **kwargs):
         h_i_x)           # classifier evaluation, also stored
 
     if loglevel > 0:
-    logging.info('{}, {}, {}, {}'.format(
-                        weighted_error, iThreshold, iDirection*iFeature, 0))
+        logging.info('{}, {}, {}, {}'.format(
+            weighted_error, iThreshold, iDirection*iFeature, 0))
     return newStump
 
 
@@ -666,9 +666,10 @@ if __name__ == '__main__':
         print('Performing cross validation.')
         CVError = analyzeCVError(
             args['-i'], int(args['-k']),
-            float(args['-r']), int(float((args['<T>']))), int(args['--seed']))
+            float(args['-r']), int(float((args['-T']))), int(args['--seed']))
     elif args['run']:
+        import pdb; pdb.set_trace()  # noqa
         print('Training {} with {}% stumps for {} iterations ...'.format(
-            args['-i'], float(args['-r'])*100, int(float((args['<T>'])))))
-        g = adaBoost(args['-i'], (0, float(args['-r'])), int(float((args['<T>']))),
+            args['-i'], float(args['-r'])*100, int(float(args['-T']))))
+        g = adaBoost(args['-i'], (0, float(args['-r'])), int(float((args['-T']))),
                      int(args['--seed']), args['<loglevel>'])
