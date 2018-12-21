@@ -175,40 +175,17 @@ def createBoostingStumps(data, loglevel):
     # we use python lists with tuples as they are actually faster in our case
     # that numpy arrays
     baseClassifiers = []
-    y = data[:, 0]
-    # Here D_t is uniform to create the stumps
-    D_t = 1.0/data.shape[0]
     # NOTE: these loops can run in parallel
     for iFeature in range(1, data.shape[1]):  # 0th column is the label
         thresholds = np.unique(data[:, iFeature])
         for iThreshold in thresholds:
-            iDirection = +1
-            h_i_x = ((data[:, iFeature] >= iThreshold)+0)*2-1  # {-1, 1} labels
-            errors = (-y * h_i_x+1)/2  # {0, 1}, 1 records misclassified data
-            # Invert the classifier and its errors
-            errors = (-y * h_i_x+1)/2
-
-            # invert the classifier if its error exceeds random guessing
-            weighted_error = np.sum(D_t * errors)
-            if weighted_error > 0.5:
-                iDirection = -iDirection
-                h_i_x = -h_i_x
-                errors = 1-errors
-                weighted_error = np.sum(D_t * errors)
-
-            # record this classifier
-            # alpha, to be used by predict() after adaBoost() finishes training
-            alpha = 1.0  # placeholder
-            # $\epsilon_t$: weighted_error weights classification errors by D_t
-            baseClassifiers.append((
-              weighted_error,  # used to pick classifiers and analyze algorithm
-              (iThreshold, iDirection*iFeature, alpha),  # the classifier tuple
-              errors,         # classifier errors, stored to prevent evaluation
-              h_i_x))         # classifier evaluation, also stored
-
-            if loglevel > 0:
-                logging.info('{}, {}, {}, {}'.format(
-                    weighted_error, iThreshold, iDirection*iFeature, 0))
+            baseClassifiers.append(applyStump2Data(
+                stump, data, evals=True,
+                **{'iThreshold': iThreshold,
+                   'iFeature': iFeature,
+                   'D_t': None,
+                   'alpha': None,
+                   'loglevel': loglevel}))
 
     return baseClassifiers
 
@@ -249,35 +226,17 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, t, nStumps, loglevel):
     # was the second best, or our worst performance later
     sampleErrors = np.zeros(index_classifiers.sum())
     # NOTE: these loops can run in parallel
-    for i, iStump in enumerate(index_classifiers_list):
+    for _, iStump in enumerate(index_classifiers_list):
         # load a classifier
-        iThreshold, temp, _ = stumps[iStump][1]
-        iFeature = np.abs(temp)
-        iDirection = np.sign(temp)
-        errors = stumps[iStump][2]
-        h_i_x = stumps[iStump][3]
+        stumps[iStump] = applyStump2Data(  # only change some stumps
+            stumps[iStump], data, evals=False,
+            **{'D_t': D_t,
+               'iThreshold': None,
+                'iFeature': None,
+                'alpha': None,
+                'loglevel': loglevel})
 
-        # invert the classifier if its error exceeds random guessing
-        weighted_error = np.sum(D_t * errors)
-        if weighted_error > 0.5:
-            iDirection = -iDirection
-            h_i_x = -h_i_x
-            errors = 1 - errors
-            weighted_error = np.sum(D_t * errors)
-
-        # update this classifier
-        alpha = 1.0
-        stumps[iStump] = (
-            weighted_error,  # used to pick classifiers and analyze algorithm
-            (iThreshold, iDirection*iFeature, alpha),  # the classifier tuple
-            errors,         # classifier errors, stored to prevent evaluation
-            h_i_x)  # store this rather than a pointer to the stumps
-
-        if loglevel > 0:
-                logging.info('{}, {}, {}, {}'.format(
-                    weighted_error, iThreshold, iDirection*iFeature, t))
-
-        sampleErrors[i] = weighted_error
+    sampleErrors = [iStump[0] for iStump in stumps[index_classifiers_list]]
 
     minError = sampleErrors.min()
     idxBestInSample = index_classifiers_list[sampleErrors.argmin()]
@@ -301,29 +260,19 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
     elif type(test_data_npy) is np.ndarray:
         data = test_data_npy
 
-    y = data[:, 0]
-    D_t = 1.0/y.size
-    nLearnedClassifiers = len(learnedClassifiers)
-    h_x = np.zeros((data.shape[0], nLearnedClassifiers))
     evaluatedClassifiers = []
-    for iStump in range(nLearnedClassifiers):  # 0th column is the label
-        iThreshold, temp, alpha = learnedClassifiers[iStump]
-        iDirection = np.sign(temp)  # Extract the direction and the feature
-        iFeature = np.abs(temp)
+    for stump in learnedClassifiers:  # 0th column is the label
+        evaluatedClassifiers.append(applyStump2Data(
+            stump, data, evals=True,
+            **{'iThreshold': None,
+               'D_t': None,
+               'iFeature': None,
+               'alpha': None,
+               'loglevel': 0}))
 
-        h_i_x = ((data[:, iFeature] >= iThreshold)+0)*2-1  # {-1, 1} labels
-        errors = (-y * h_i_x+1)/2  # {0, 1}, 1 records misclassified data
-        # Invert the classifier and its errors if the classifier was inverted
-        if iDirection < 0:
-            errors = 1 - errors
-            h_i_x = -1 * h_i_x
-        h_x[:, iStump] = alpha * h_i_x            # weighted
-
-        evaluatedClassifiers.append((
-            np.sum(errors)/D_t,  # not used
-            (iThreshold, iDirection*iFeature, alpha),  # the classifier tuple
-            errors,         # classifier errors, stored to prevent evaluation
-            h_i_x))  # store this rather than a pointer to the stumps
+    h_x = np.zeros((data.shape[0], len(learnedClassifiers)))
+    for stump in evaluatedClassifiers:
+        h_x[:, iStump] = stump[1][2] * stump[3]   # weighted: alpha*h_i_x
 
     y_predict = np.sign(np.sum(h_x, 1))           # majority
 
@@ -331,6 +280,50 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
     error = np.sum((y != y_predict)+0.0)/y.shape[0]
 
     return error, y_predict, y, evaluatedClassifiers
+
+
+def applyStump2Data(stump, data, evals, **kwargs):
+    if iThreshold is None:
+        # Just unpack stump
+        iThreshold, temp, alpha = stump[1]
+        iDirection = np.sign(temp)
+        iFeature = np.abs(temp)
+        h_i_x = stump[3]
+        errors = stump[2]
+
+    if evals is True:
+        # need iFeature, iThreshold
+        y = data[0, :]
+        iDirection = +1
+        # Here D_t is uniform to create the stumps
+        D_t = 1.0/y.size
+        # NOTE: This is the only place any stump is actually evaluated
+        h_i_x = ((data[:, iFeature] >= iThreshold)+0)*2-1  # {-1, 1} labels
+        errors = (-y * h_i_x+1)/2  # {0, 1}, 1 records misclassified data
+
+
+    # Invert the classifier if its error exceeds random guessing
+    # Here D_t could change between rounds
+    weighted_error = np.sum(D_t * errors)
+    if weighted_error > 0.5:
+        iDirection = -iDirection
+        h_i_x = -h_i_x
+        errors = 1-errors
+    weighted_error = np.sum(D_t * errors)
+
+    # record this classifier
+    # alpha, to be used by predict() after adaBoost() finishes training
+    # $\epsilon_t$: weighted_error weights classification errors by D_t
+    newStump = (
+        weighted_error,  # used to pick classifiers and analyze algorithm
+        (iThreshold, iDirection*iFeature, alpha),  # the classifier tuple
+        errors,          # classifier errors, stored to prevent evaluation
+        h_i_x)           # classifier evaluation, also stored
+
+    if loglevel > 0:
+    logging.info('{}, {}, {}, {}'.format(
+                        weighted_error, iThreshold, iDirection*iFeature, 0))
+    return newStump
 
 
 def writeStumps2CSV(stumps, fname):
@@ -556,7 +549,7 @@ sparse missing values were kept intact.
         print('There are still {} missing data points.'.format(
             np.isnan(data).nonzero()[0].size))
         # TODO: only remove cases or features s.t. least data points are
-        # removed as well
+        # removed as well to preserve as much data as possible
         # HACK: remove all missing cases for now
         data = data[~np.isnan(data).any(1), :]
 
