@@ -143,7 +143,7 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0, 0), T=int(1e2),
     h = []
     alpha = np.zeros(T)
     np.random.seed(seed)
-    for t in range(0, T):
+    for t in tqdm(range(0, T)):
         auxVars['t'] = t
         e_t, h_t = evalToPickClassifier(stumps, D_t, data, sampleRatio,
                                                 **auxVars)
@@ -281,26 +281,20 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, t, nStumps, loglevel):
     # was the second best, or our worst performance later
     sampleErrors = np.zeros(index_classifiers.sum())
     # NOTE: these loops can run in parallel
+    # Parallel wasn't faster for stumps, doesn't worth the overhead
 
     sampleStumps = list(compress(stumps, index_classifiers[0]))
-
-    t1 = time()
-    updatedStumps = map(partial(
+    # TODO: Original implementation mutated stumps in place
+    # May be better than creating a whole new stumps just to
+    # pick one out
+    updatedStumps = myMap(partial(
         wrap_evalToPickClassifier, data=data, D_t=D_t, loglevel=loglevel),
                           sampleStumps)
-    t1 = time() - t1
-
-    t0 = time()
-    updatedStumps = p.map(partial(
-        wrap_evalToPickClassifier, data=data, D_t=D_t, loglevel=loglevel),
-                          sampleStumps)
-    t0 = time() - t0
-    print('Eval time: map {}, p.mat {}'. format(t1, t0))
 
     sampleErrors = np.array([stump[0] for stump in updatedStumps])
 
     minError = sampleErrors.min()
-    idxBestInSample = index_classifiers_list[sampleErrors.argmin()]
+    idxBestInSample = sampleErrors.argmin()
     bestInSample = updatedStumps[idxBestInSample]
     return minError, bestInSample
 
@@ -682,7 +676,7 @@ split randomly where k percent is used for training and 1-k for testing.
 if __name__ == '__main__':
     args = docopt(__doc__, version='Naval Fate 2.0')
     if args['--parallel']:
-        p = mp.Pool()
+        p = mp.Pool()  # Shared variable so pool persists during a call
         myMap = p.map
     else:
         myMap = map
