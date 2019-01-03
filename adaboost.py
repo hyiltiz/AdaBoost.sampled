@@ -345,8 +345,10 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
 
     # this map should be immutable (pure) function so the learned classifiers
     # are not mutated each time they are evaluated on new data
+    # wrap myMap() iterables with tqdm() to get a progress bar
+    # also works for multiprocessing map()
     evaluatedClassifiers = myMap(partial(wrap_predict, data=data),
-                                 learnedClassifiers)
+                                 tqdm(learnedClassifiers))
 
     h_x = np.zeros((data.shape[0], len(learnedClassifiers)))
     for iStump, stump in enumerate(evaluatedClassifiers):
