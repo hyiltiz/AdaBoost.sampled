@@ -735,5 +735,9 @@ if __name__ == '__main__':
     elif args['run']:
         print('Training {} with {}% stumps for {} iterations ...'.format(
             args['-i'], float(args['-r'])*100, int(float(args['-T']))))
-        g = adaBoost(args['-i'], (0, float(args['-r'])), int(float((args['-T']))),
-                     int(args['--seed']), args['<loglevel>'])
+        t0 = time()
+        g = adaBoost(args['-i'], (0, float(args['-r'])),
+                     int(float((args['-T']))), int(args['--seed']),
+                     args['<loglevel>'])
+        tSecs = time() - t0
+        print('Time spent: {}s'.format(tSecs))
