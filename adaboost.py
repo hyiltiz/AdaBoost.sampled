@@ -113,9 +113,11 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0, 0), T=int(1e2),
     data_npy, data, data_test = getData(data_npy)
 
     timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
-    pp = PdfPages(data_npy + '_results_plots_' + timestamp + '.pdf')
+    pp = PdfPages('./results/' + data_npy + '_results_plots_' +
+                  timestamp + '.pdf')
 
-    logFilename = '{}_classifiers_history_seed{}_sampleRatio{}_{}.log'.format(
+    logFilename = './results/{}_classifiers_history_seed{}'
+    '_sampleRatio{}_{}.log'.format(
         data_npy, seed, sampleRatio[1], timestamp)
     if loglevel > 0:
         logging.basicConfig(format='%(message)s',
@@ -130,7 +132,7 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0, 0), T=int(1e2),
     print('Number of base classifiers: {}'.format(nStumps))
 
     # write into a table and also generate a histogram of errors
-    stumpsFig = writeStumps2CSV(stumps, data_npy + '_stumps')
+    stumpsFig = writeStumps2CSV(stumps, './results/' + data_npy + '_stumps')
     pp.savefig(stumpsFig)
 
     # some auxiliary variables
@@ -160,7 +162,8 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0, 0), T=int(1e2),
     # Save the results to a csv table and generate some plots
     auxVars2 = {'logFilename': logFilename,
                 'sampleClassifierRatio': sampleRatio[1],
-                'gammaHistoryFile': '{}_ensemble_history_seed{}_sampleRatio{}'
+                'gammaHistoryFile': './results/{}_ensemble_history_seed{}'
+                '_sampleRatio{}'
                 '_{}.csv'.format(data_npy, seed, sampleRatio[1],
                                  timestamp)}
 
@@ -415,7 +418,7 @@ def generateResults(g, h, dataTuple, pp,
     data_npy, data, data_test = dataTuple
     output = predict(g, data)
     h.append((output[0], (-999, -999, -999)))
-    ensembleFig = writeStumps2CSV(h, data_npy + '_ensemble')
+    ensembleFig = writeStumps2CSV(h, './results/' + data_npy + '_ensemble')
     h.pop()  # already recorded the ensemble error in CSV
     pp.savefig(ensembleFig)
 
