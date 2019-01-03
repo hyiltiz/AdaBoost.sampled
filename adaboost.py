@@ -280,23 +280,37 @@ def evalToPickClassifier(stumps, D_t, data, sampleRatio, t, nStumps, loglevel):
     # We keep a list of best in samples, not a tuple so we could check what
     # was the second best, or our worst performance later
     sampleErrors = np.zeros(index_classifiers.sum())
-    # NOTE: these loops can run in parallel
+
     # Parallel wasn't faster for stumps, doesn't worth the overhead
+    # So mutate the list in place for fastest evaluation
 
-    sampleStumps = list(compress(stumps, index_classifiers[0]))
-    # TODO: Original implementation mutated stumps in place
-    # May be better than creating a whole new stumps just to
-    # pick one out
-    updatedStumps = myMap(partial(
-        wrap_evalToPickClassifier, data=data, D_t=D_t, loglevel=loglevel),
-                          sampleStumps)
+    if type(p) is None:
+        # mutated stumps in place
+        # Scan the list for the subset to evaluate and pick among those
+        for i in index_classifiers_list:
+            stumps[i] = wrap_evalToPickClassifier(
+                stumps[i], data=data, D_t=D_t, loglevel=loglevel)
 
-    sampleErrors = np.array([stump[0] for stump in updatedStumps])
+        sampleErrors = np.array([stumps[i][0] for i in index_classifiers_list])
 
-    minError = sampleErrors.min()
-    idxBestInSample = sampleErrors.argmin()
-    bestInSample = updatedStumps[idxBestInSample]
+        minError = sampleErrors.min()
+        idxBestInSample = index_classifiers_list[sampleErrors.argmin()]
+        bestInSample = stumps[idxBestInSample]
+    else:  # type(p) is mp.pool.Pool:
+        # Run in parallel
+        # Filter the list and create a subset, evaluate it, pick the best
+        sampleStumps = list(compress(stumps, index_classifiers[0]))
+        updatedStumps = myMap(partial(wrap_evalToPickClassifier,
+                                      data=data, D_t=D_t, loglevel=loglevel),
+                              sampleStumps)
+
+        sampleErrors = np.array([stump[0] for stump in updatedStumps])
+
+        minError = sampleErrors.min()
+        idxBestInSample = sampleErrors.argmin()
+        bestInSample = updatedStumps[idxBestInSample]
     return minError, bestInSample
+
 
 def wrap_evalToPickClassifier(x, data, D_t, loglevel):
     return applyStump2Data(  # only change some stumps
@@ -325,7 +339,10 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
         data = test_data_npy
 
     # p = mp.Pool()
-    evaluatedClassifiers = map(partial(wrap_predict, data=data),
+
+    # this map should be immutable (pure) function so the learned classifiers
+    # are not mutated each time they are evaluated on new data
+    evaluatedClassifiers = myMap(partial(wrap_predict, data=data),
                                  learnedClassifiers)
 
     h_x = np.zeros((data.shape[0], len(learnedClassifiers)))
@@ -676,13 +693,30 @@ def getData(data_npy, k=0.8):
     return data_npy, data, data_test
 
 
+def map_mut(fn, lst):
+    """Maps fn onto lst by mutation.
+
+    >>> lst = [1, 2, 3, 4]
+    >>> map_mut(lambda x: x**2, lst)
+    >>> lst
+    [1, 4, 9, 16]
+    """
+    for index, value in enumerate(lst):
+        lst[index] = fn(value)
+    return lst
+
+
 if __name__ == '__main__':
     args = docopt(__doc__, version='Naval Fate 2.0')
     if args['--parallel']:
         p = mp.Pool()  # Shared variable so pool persists during a call
         myMap = p.map
     else:
+        p = None
         myMap = map
+        # map() is immutable thus returns a new list
+        # expensive esp. when parallelization is not needed
+        # myMap = map_mut
 
     if args['convert']:
         data_npy = args['-i']
