@@ -2,8 +2,9 @@
 libsvm formatted text files for binary classification. Creating training and
 test data sets, generating result plots and tables and algorithm analysis are
 all performed automatically. You can also do the above with cross validation.
-This module is designed so that it can be imported to work with your own
-program. Functional programming principles are followed whenever possible.
+This module is designed so that it can be imported as a library to work with
+your own program. To use multiprocessing, create a multiprocessing pool as a
+global variable.
 
 Usage:
   adaboost.py run [-i <dataset>] [-r <sampleClassifierRatio>] [-T <T>] [--seed <seed>] [--log <loglevel>] [--parallel]
@@ -27,7 +28,6 @@ Options:
 """
 
 from docopt import docopt
-import sys
 import os.path
 import os
 import datetime
@@ -36,6 +36,7 @@ import multiprocessing as mp
 from tqdm import tqdm
 from functools import partial
 from itertools import compress
+import sys
 from time import time
 
 import numpy as np
@@ -54,7 +55,6 @@ os.environ["OPENBLAS_MAIN_FREE"] = "1"
 
 # use this to debug
 # import pdb; pdb.set_trace()  # noqa
-
 
 
 def adaBoost(data_npy='breast-cancer', sampleRatio=(0, 0), T=int(1e2),
@@ -146,7 +146,7 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0, 0), T=int(1e2),
     for t in tqdm(range(0, T)):
         auxVars['t'] = t
         e_t, h_t = evalToPickClassifier(stumps, D_t, data, sampleRatio,
-                                                **auxVars)
+                                        **auxVars)
         h.append(h_t)  # keep the errors
         alpha[t] = 1.0/2 * np.log(1/e_t-1)
         # not keeping track of D_t, Z_t history to optimize for memory
@@ -335,10 +335,11 @@ def predict(learnedClassifiers, test_data_npy='breast-cancer_test0.npy'):
     y = data[:, 0]
     y_predict = np.sign(np.sum(h_x, 1))           # majority
 
-    errors = ((y != y_predict)+0.0)*2-1
+    errors = ((y != y_predict)+0.0)*2-1  # noqa
     error = np.sum((y != y_predict)+0.0)/y.shape[0]
 
     return error, y_predict, y, evaluatedClassifiers
+
 
 def wrap_predict(x, data): return applyStump2Data(
         (None, x, None, None), data, evals=True,
@@ -359,10 +360,10 @@ def writeStumps2CSV(stumps, fname):
     nStumps = len(stumps)
     stumpsTable = np.zeros((nStumps, 4))
     for iStump in range(nStumps):
-            stumpsTable[iStump, :] = np.hstack((
-                    np.array(stumps[iStump][0]),  # weighted_error
-                    np.array(stumps[iStump][1])   # stumps, a 3-tuple
-            ))
+        stumpsTable[iStump, :] = np.hstack((
+            np.array(stumps[iStump][0]),  # weighted_error
+            np.array(stumps[iStump][1])   # stumps, a 3-tuple
+        ))
 
     np.savetxt(fname + '.dump.csv', stumpsTable,
                delimiter=',', newline='\n', comments='',
@@ -434,7 +435,7 @@ def generateResults(g, h, dataTuple, pp,
     empiricalError = Z.prod(0)
     empiricalErrorBound63 = np.exp(-2*np.sum(np.power(edges, 2), 0))
     edges[edges==0] = 0.5  # rewrite 0 into 0.5 so argmin works
-    empiricalErrorBound64 = np.exp(-2*np.power(edges.min(0), 2)*range(1,T+1))
+    empiricalErrorBound64 = np.exp(-2*np.power(edges.min(0), 2)*range(1, T+1))
     sigma = ((np.random.rand(int(1e5), m) < 0.5)+0)*2-1  # Rademacher variable
     empiricalRademacher = np.max(np.matmul(sigma, h_i_x_train)/m, 1).mean()
     rho = 0.01
@@ -480,8 +481,8 @@ def generateResults(g, h, dataTuple, pp,
     # Plot erros history histribution of all evaluated classifiers during each
     # round
     logHistory = np.zeros(1)
-    if (os.path.isfile(logFilename) and
-            len(open(logFilename, 'rb').readlines()) >= 2):
+    if (os.path.isfile(logFilename) and len(
+            open(logFilename, 'rb').readlines()) >= 2):
         logHistory = np.loadtxt(logFilename, delimiter=',', skiprows=1)
         historyErrorsEvaluated = plt.figure()
         plt.scatter(logHistory[:, 3], logHistory[:, 0], s=0.1)
@@ -508,9 +509,10 @@ def libsvmLineParser(line):
     """Parses a libsvm data line to a dictionary.
 
     NOTE: libsvm data files for binary classification are .txt files where each
-lines starts with an integer representing class labels, followed by several n:f
-separated by spaces where n is an integer representing the nth feature with
-value f.
+    lines starts with an integer representing class labels, followed by several
+    n:f separated by spaces where n is an integer representing the nth feature
+    with value f.
+
     # TODO: Extend it to deal with multilabel classification parsing.
 
     """
@@ -531,9 +533,9 @@ value f.
 
 
 def libsvmReadTxt(file):
-    """Reads a libsvm formatted .txt file into a numpy array. The cases or features
-that has no data (complete missing value rows or columns) are pruned out, but
-sparse missing values were kept intact.
+    """Reads a libsvm formatted .txt file into a numpy array. The cases or
+    features that has no data (complete missing value rows or columns) are
+    pruned out, but sparse missing values were kept intact.
 
     """
 
@@ -577,7 +579,7 @@ sparse missing values were kept intact.
         data = data[~np.isnan(data).any(1), :]
 
     # normalize the data into [-1,1]
-    scale = lambda x: (x-np.min(x,0))/(np.max(x,0)-np.min(x,0))*2-1
+    def scale(x): return (x-np.min(x,0))/(np.max(x,0)-np.min(x,0))*2-1
 
     # Do not scale class labels
     #   datarray = np.column_stack([data[:,0], scale(data[:,1:])])
@@ -622,17 +624,18 @@ def analyzeCVError(data_txt, k=10, sampleClassifierRatio=1.0, T=1e4, seed=0):
     plt.ylabel('Error $\epsilon_t$')
     plt.savefig('{}_{}CV_seed{}_sampleRatio{}_{}.eps'.format(
         data_npy, k, seed, sampleClassifierRatio, timestamp),
-                dpi = 1200, format = 'eps')
-    plt.ylim((0,1))
+                dpi=1200, format='eps')
+    plt.ylim((0, 1))
 
     return CVError
 
 
 def getData(data_npy, k=0.8):
     """Reads data_npy into a string indicating the data set, numpy arrays of
-training and test data sets. If k>1 and the input is a libsvm .txt file, split
-into k training and test sets for cross-validation. If 0<k<1, then the data is
-split randomly where k percent is used for training and 1-k for testing.
+    training and test data sets. If k>1 and the input is a libsvm .txt file,
+    split into k training and test sets for cross-validation. If 0<k<1, then
+    the data is split randomly where k percent is used for training and 1-k for
+    testing.
 
     """
 
