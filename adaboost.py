@@ -16,16 +16,21 @@ Usage:
   adaboost.py (--version)
 
 Options:
-  -h --help                          Show this screen.
-  --version                          Show version.
-  -i <dataset>                       Data set to perform adaBoost. [default: breast-cancer.txt]
-  -r <sampleClassifierRatio>         Percentage of classifiers used. [default: 1.0]
-  --seed <seed>                      Seed to initialize adaboost() function. Controls sampler. [default: 0]
-  --loglevel <loglevel>              Use INFO to record classifiers evaluated each round. [default: NOTSET]
-  -k <k>                             k-fold cross validation. [default: 10]
-  -s <s>                             Split s percent of data into training set. [default: 0.8]
-  -T <T>                             Number of rounds to boost. [default: 1e3]
-  --parallel                         Create multiprocessing pool of workers to parallel jobs within each round. [default: None]
+  -h --help      Show this screen.
+  --version      Show version.
+  -i <dataset>   Data set to perform adaBoost. [default: breast-cancer.txt]
+  -r <sampleClassifierRatio>
+                 Percentage of classifiers used. [default: 1.0]
+  --seed <seed>  Seed to initialize adaboost() function.
+                 Controls sampler. [default: 0]
+  --loglevel <loglevel>
+                 Use INFO to record classifiers evaluated each round.
+                 Creates a .log file. [default: NOTSET]
+  -k <k>         k-fold cross validation. [default: 10]
+  -s <s>         Split s percent of data into training set. [default: 0.8]
+  -T <T>         Number of rounds to boost. [default: 1e3]
+  --parallel     Create multiprocessing pool of workers to parallel jobs
+                 within each round. [default: None]
 
 """
 
