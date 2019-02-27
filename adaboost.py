@@ -7,9 +7,11 @@ your own program. To use multiprocessing, create a multiprocessing pool as a
 global variable.
 
 Usage:
-  adaboost.py run [-i <dataset>] [-r <sampleClassifierRatio>] [-T <T>] [--seed <seed>] [--log <loglevel>] [--parallel]
+  adaboost.py run [-i <dataset>] [-r <sampleClassifierRatio>] [-T <T>]
+                  [--seed <seed>] [--log <loglevel>] [--parallel]
+  adaboost.py cv  [-i <dataset>] [-r <sampleClassifierRatio>] [-T <T>]
+                  [--seed <seed>] [-k <k>]
   adaboost.py convert [-i <dataset>] [-s <s>]
-  adaboost.py cv [-i <dataset>] [-k <k>] [-r <sampleClassifierRatio>] [-T <T>] [--seed <seed>]
   adaboost.py (-h | --help)
   adaboost.py (--version)
 
@@ -36,8 +38,8 @@ import multiprocessing as mp
 from tqdm import tqdm
 from functools import partial
 from itertools import compress
-import sys
 from time import time
+# import sys
 
 import numpy as np
 import matplotlib.pyplot as plt
@@ -45,7 +47,7 @@ from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib import rc
 
 
-#rc('font', **{'family': 'serif',
+# rc('font', **{'family': 'serif',
 #              'serif': ['Palatino'],
 #              'sans-serif': ['Helvetica']})
 rc('text', usetex=True)
@@ -108,7 +110,6 @@ def adaBoost(data_npy='breast-cancer', sampleRatio=(0, 0), T=int(1e2),
 
     """
     sampleDataRatio, sampleClassifierRatio = sampleRatio
-
 
     data_npy, data, data_test = getData(data_npy)
 
@@ -453,17 +454,19 @@ def generateResults(g, h, dataTuple, pp,
     e = np.tril(weighted_error_train).T  # See Mohri (2012) pp. 125
     Z = 2*np.sqrt(e*(1-e))
     edges = np.tril(0.5-weighted_error_train).T
-    Z[Z==0] = 1
+    Z[Z == 0] = 1
     empiricalError = Z.prod(0)
     empiricalErrorBound63 = np.exp(-2*np.sum(np.power(edges, 2), 0))
-    edges[edges==0] = 0.5  # rewrite 0 into 0.5 so argmin works
+    edges[edges == 0] = 0.5  # rewrite 0 into 0.5 so argmin works
+    empiricalError
     empiricalErrorBound64 = np.exp(-2*np.power(edges.min(0), 2)*range(1, T+1))
     sigma = ((np.random.rand(int(1e5), m) < 0.5)+0)*2-1  # Rademacher variable
     empiricalRademacher = np.max(np.matmul(sigma, h_i_x_train)/m, 1).mean()
     rho = 0.01
     deltaConfidence = 0.05
-    Y_predict = (((y_predict_train_history>0)+0)*2-1)
-    marginLosses, onMargin = np.vectorize(fMargin)((Y*Y_predict)/np.tril(alpha).T.sum(0), rho)
+    Y_predict = (((y_predict_train_history > 0)+0)*2-1)
+    margin = (Y*Y_predict)/np.tril(alpha).T.sum(0)
+    marginLosses, onMargin = np.vectorize(fMargin)(margin, rho)
     marginLoss = marginLosses.mean(0)
     generalizationBound616 = marginLoss + 2/rho*empiricalRademacher + \
         3*np.sqrt(np.log(2.0/deltaConfidence)/(2*m))  # Mohri (2012) pp. 133
@@ -601,7 +604,7 @@ def libsvmReadTxt(file):
         data = data[~np.isnan(data).any(1), :]
 
     # normalize the data into [-1,1]
-    def scale(x): return (x-np.min(x,0))/(np.max(x,0)-np.min(x,0))*2-1
+    def scale(x): return (x-np.min(x, 0))/(np.max(x, 0)-np.min(x, 0))*2-1
 
     # Do not scale class labels
     #   datarray = np.column_stack([data[:,0], scale(data[:,1:])])
@@ -649,7 +652,7 @@ def analyzeCVError(data_txt, k=10, sampleClassifierRatio=1.0, T=1e4, seed=0):
                 dpi=1200, format='eps')
     plt.ylim((0, 1))
 
-    return CVError
+    return CVError, historyFig
 
 
 def getData(data_npy, k=0.8):
@@ -734,7 +737,7 @@ if __name__ == '__main__':
         np.savetxt(data_npy + '-converted_test0.csv', data_test)
     elif args['cv']:
         print('Performing cross validation.')
-        CVError = analyzeCVError(
+        CVError, _ = analyzeCVError(
             args['-i'], int(args['-k']),
             float(args['-r']), int(float((args['-T']))), int(args['--seed']))
     elif args['run']:
